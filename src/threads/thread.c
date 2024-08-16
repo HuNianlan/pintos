@@ -24,6 +24,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* List of processes in THREAD_BLOCKED state, that is, Waiting for an event to trigger. in pj1 we only consider timer to trigger */
+static struct list blocked_list;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -71,6 +74,8 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+static bool thread_priority_cmp(struct list_elem* left,struct list_elem* right);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -92,6 +97,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&blocked_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -237,9 +243,61 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+  list_remove(&t->blockedelem);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+}
+
+/* Let a running thread T sleep t ticks.(a kind of transation to blocked status)
+   This is an error if T is not running.  
+  */
+void
+thread_sleep(int64_t ticks) 
+{
+  enum intr_level old_level;
+
+  ASSERT (thread_current()->status == THREAD_RUNNING);
+  old_level = intr_disable ();
+  struct thread *t = thread_current ();
+  t->wakeuptime = ticks;
+  t->status = THREAD_BLOCKED;
+  list_push_back(&blocked_list, &t->blockedelem);
+  schedule();
+  intr_set_level (old_level);
+}
+
+/* transitions all sleep(blocked) thread T to ready-to-run state when wakeuptime is zero */
+void thread_check_awake(void){
+  enum intr_level old_level;
+
+  old_level = intr_disable ();
+  struct list_elem *e;
+
+  for (e = list_begin (&blocked_list); e != list_end (&blocked_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, blockedelem);
+      if(t->wakeuptime > 0){
+        t->wakeuptime--;
+        if(t->wakeuptime == 0){
+          t->status = THREAD_READY;
+          // list_push_back(&ready_list,&t->elem);
+          list_insert_ordered(&ready_list,&t->elem,thread_priority_cmp,NULL);
+          list_remove (&t->blockedelem);
+        }
+      }
+      else{
+        t->wakeuptime--;
+      }
+    }
+  intr_set_level (old_level);
+}
+
+static bool thread_priority_cmp(struct list_elem* left,struct list_elem* right){
+  struct thread *l = list_entry (left, struct thread, elem);
+  struct thread *r = list_entry (right, struct thread, elem);
+  return l->priority > r->priority;
 }
 
 /* Returns the name of the running thread. */
@@ -463,9 +521,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->wakeuptime = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+  list_push_back(&blocked_list,&t->blockedelem);
   intr_set_level (old_level);
 }
 

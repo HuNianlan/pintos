@@ -92,8 +92,11 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  // while (timer_elapsed (start) < ticks) 
+  //   thread_yield ();
+  if(timer_elapsed (start) < ticks)
+    thread_sleep(ticks - timer_elapsed (start));
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,6 +174,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  thread_check_awake();
   thread_tick ();
 }
 
