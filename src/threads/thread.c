@@ -74,7 +74,6 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-static bool thread_priority_cmp(struct list_elem* left,struct list_elem* right);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -206,7 +205,8 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
+  if(thread_current()->priority < priority)
+    thread_yield();
   return tid;
 }
 
@@ -244,7 +244,8 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_remove(&t->blockedelem);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list,&t->elem,thread_priority_cmp,NULL);
+  // list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -287,14 +288,12 @@ void thread_check_awake(void){
           list_remove (&t->blockedelem);
         }
       }
-      else{
-        t->wakeuptime--;
-      }
     }
   intr_set_level (old_level);
 }
 
-static bool thread_priority_cmp(struct list_elem* left,struct list_elem* right){
+/*cmp_priority*/
+bool thread_priority_cmp(struct list_elem* left,struct list_elem* right){
   struct thread *l = list_entry (left, struct thread, elem);
   struct thread *r = list_entry (right, struct thread, elem);
   return l->priority > r->priority;
@@ -366,7 +365,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list,&cur->elem,thread_priority_cmp,NULL);
+    // list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -393,7 +393,20 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread* curr_thread = thread_current();
+  curr_thread->real_priority = new_priority;
+  if(curr_thread->real_priority>= curr_thread->priority){
+    curr_thread->priority = curr_thread->real_priority;
+    return;
+  }
+
+  if(list_empty(&curr_thread->holding_locks)){ //priority without donation
+    curr_thread->priority = curr_thread->real_priority;
+    thread_yield();
+  }
+  // int max_priority = list_entry (list_max(&ready_list,thread_priority_cmp,NULL), struct thread, elem)->priority;
+  // if(thread_current()->priority < max_priority)
+  //   thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -519,9 +532,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+  t->real_priority = priority;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->wakeuptime = 0;
+
+  list_init(&t->holding_locks);
+  t->waiting_locks = NULL;
+
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
