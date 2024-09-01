@@ -99,6 +99,9 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element (for ready list). */
 
+    int nice;   
+    int recent_cpu;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -148,5 +151,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 bool thread_priority_cmp(struct list_elem* left,struct list_elem* right);
-
+void foreach_thread(thread_action_func* func,void* aux);
+void increase_cpu_by_one(void);
+void recent_cpu_update(struct thread*);
+void load_avg_update(void);
+void priority_update(struct thread*);
 #endif /* threads/thread.h */

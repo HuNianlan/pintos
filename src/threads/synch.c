@@ -193,6 +193,7 @@ lock_init (struct lock *lock)
 }
 
 void update_thread_priority(){
+  if(thread_mlfqs)return;
   struct thread* thread =  thread_current();
   thread->priority = thread->real_priority;
   if(list_empty(&thread->holding_locks)) return;
@@ -221,10 +222,10 @@ lock_acquire (struct lock *lock)
 
   if(lock_try_acquire(lock) == true){
     list_insert_ordered (&thread_current()->holding_locks, &lock->lock_elem, lock_priority_cmp, NULL);
-    if(lock->max_priority > curr_thread->priority){
-      curr_thread->priority = lock->max_priority;
+    // if(lock->max_priority > curr_thread->priority){
+      // curr_thread->priority = lock->max_priority;
       lock_thread_priority_donation(curr_thread->waiting_locks,curr_thread->priority);
-    }
+    // }
     return;}
   curr_thread->waiting_locks = lock;
   lock_thread_priority_donation(lock,curr_thread->priority);
@@ -236,8 +237,8 @@ lock_acquire (struct lock *lock)
   curr_thread = thread_current ();
   curr_thread->waiting_locks = NULL;
   list_insert_ordered (&curr_thread->holding_locks, &lock->lock_elem, lock_priority_cmp, NULL);
-
-  lock->max_priority = curr_thread->priority;
+  if(!thread_mlfqs)
+    lock->max_priority = curr_thread->priority;
   // thread_hold_the_lock (lock);
   lock->holder = curr_thread;
 
@@ -246,6 +247,7 @@ lock_acquire (struct lock *lock)
 }
 
 void lock_thread_priority_donation(struct lock* lock, int donated_priority){
+  if(thread_mlfqs) return;
   if(lock == NULL){return;}
   if(donated_priority<lock->max_priority) return;
   lock->max_priority = donated_priority;
@@ -289,16 +291,8 @@ lock_release (struct lock *lock)
 
   list_remove(&lock->lock_elem);
   update_thread_priority();
-  // struct thread* curr_thread = thread_current();
-  // if(!list_empty(&curr_thread->holding_locks)){  
-  //   curr_thread->priority = list_entry (list_front (&thread_current()->holding_locks), struct lock, lock_elem)->max_priority;
-  // }
-  // if(curr_thread->priority< curr_thread->real_priority){
-  //   curr_thread->priority = curr_thread->real_priority;
-  // }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
-  // thread_yield();
   intr_set_level (old_level);
 
 }
