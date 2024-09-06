@@ -17,9 +17,12 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void push_arguments(void ** esp, int argc , char * argv[],int cmdlength);
+// static int split_cmdline(const char* cmdline,char** argv);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -38,10 +41,21 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /*Parse command line and get program(thread) name*/
+  char *save_ptr;
+  char *thread_name = malloc(strlen(file_name)+1);
+  // char *thread_name;
+  strlcpy (thread_name, file_name, PGSIZE);
+
+  thread_name = strtok_r(thread_name," ",&save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
+  // tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  free(thread_name);
+
   return tid;
 }
 
@@ -50,9 +64,22 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+
+  char* argv[70];
+  int argc = 0;
+  int cmdlength = 0;
+
+  /*parse filename*/
+  char *token = NULL, *save_ptr = NULL;
+  strlcpy(token,file_name,strlen(file_name)+1);
+  file_name = strtok_r(file_name," ",&save_ptr);
+  argv[0] = file_name;
+  argc++;
+  cmdlength+= strlen(file_name);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -60,12 +87,25 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  
+  // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp,true);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
-
+  
+  /* If load succeed, push arguments. */
+  else{
+    for (token = strtok_r (NULL, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+        argv[argc++] = token;
+        cmdlength+= strlen(token);
+        // printf ("'%s'\n", token);
+      }
+    push_arguments(&if_.esp,argc,argv,cmdlength + argc);
+  }
+  // printf("%d",if_.esp);
+  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp,true);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -462,4 +502,38 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+void push_arguments(void ** esp, int argc , char * argv[], int cmdlength){
+  int i;
+  int paddinglength = ((*(uint32_t*)*esp - cmdlength)%4);
+
+  uint32_t *agrument_address = (uint32_t*)*esp - paddinglength;/*store agrument address*/
+  agrument_address -=4;
+  *agrument_address = 0;
+
+  /*push argument and address*/
+  for(i = argc-1;i>=0;i--){
+    *esp -= (strlen(argv[i])+1);
+    strlcpy(*esp,argv[i],strlen(argv[i])+1);
+    agrument_address-=4;
+    *agrument_address = (uint32_t)*esp;
+  }
+
+  /*padding*/
+  for(i = 0;i<paddinglength;i++){
+    *esp-=1;
+    *(uint32_t*)*esp = 0;
+  }
+
+  *esp -= (argc+2)*4;
+  /*argv and argc*/
+  *(uint32_t*)*esp = (*(uint32_t*)*esp+4);
+
+  *esp-=4;
+  *(uint32_t*)*esp = argc;
+
+  /*return address*/
+  *esp-=4;
+  *(uint32_t*)*esp = 0;
 }

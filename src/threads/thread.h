@@ -87,20 +87,11 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int real_priority;            /* real priority remain unchanged after initialization */
-    int priority;                       /* Priority after donation. */
-    int64_t wakeuptime;                /* trigger event for timers. */
+    int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    struct list_elem blockedelem;       /* List element for blocked threads list. */
 
-    struct list holding_locks;          /*locks that the thread holds, a bridge for donations*/
-    struct lock* waiting_locks;          /*locks that the thread is waiting for*/
-    
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element (for ready list). */
-
-    int nice;   
-    int recent_cpu;
+    struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -125,11 +116,8 @@ void thread_print_stats (void);
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
-
 void thread_block (void);
 void thread_unblock (struct thread *);
-void thread_sleep(int64_t);
-void thread_check_awake(void);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);
@@ -150,10 +138,4 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-bool thread_priority_cmp(struct list_elem* left,struct list_elem* right);
-void foreach_thread(thread_action_func* func,void* aux);
-void increase_cpu_by_one(void);
-void recent_cpu_update(struct thread*);
-void load_avg_update(void);
-void priority_update(struct thread*);
 #endif /* threads/thread.h */
