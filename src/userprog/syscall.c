@@ -9,6 +9,9 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 
+#define STDIN 0
+#define STDOUT 1
+
 typedef int pid_t;
 
 /* Store all the current opened file*/
@@ -18,9 +21,10 @@ struct lock file_lock;
 struct file_descripter
 {
   int fd;
+  tid_t owner; // used in file close
   struct file *file;
   struct list_elem elem;
-  struct list_elem thread_elem;
+  // struct list_elem thread_elem;
 };
 
 /* System Calls for pj2*/
@@ -42,6 +46,7 @@ void close (int fd);
 static void syscall_handler (struct intr_frame *);
 bool is_valid_pointer(void* ptr);
 static struct file *find_file (int fd);
+int allocate_fd ();
 
 void
 syscall_init (void) 
@@ -133,7 +138,7 @@ bool
 is_valid_pointer (void *ptr)
 {
   if ((!is_user_vaddr (ptr))
-      || (pagedir_get_page (thread_current ()->pagedir, esp) == NULL))
+      || (pagedir_get_page (thread_current ()->pagedir, ptr) == NULL))
     return false;
   return true;
 }
@@ -150,6 +155,13 @@ find_file (int fd)
         return list_entry (l, struct file_descripter, elem)->file;
     }
   return NULL;
+}
+
+int
+allocate_fd ()
+{
+  static int fd = 1;
+  return ++fd;
 }
 
 void
@@ -213,17 +225,36 @@ open (const char *file)
 
   if (f == NULL)
     return -1;
-  // 要加file descriptor
-// TODO
+  // 要加file descripter
+  struct file_descripter *fde = malloc (sizeof (struct file_descripter));
+  if (fde == NULL)
+    {
+      file_close (f);
+      lock_release (&file_lock);
+      return -1; // open fail
+    }
+  struct thread *cur = thread_current ();
+  fde->fd = allocate_fd ();
+  fde->file = f;
+  fde->owner = thread_current ()->tid;
+
+  // list_push_back(&cur->fd_list,&fde->thread_elem);
+  list_push_back (&open_file_list, &fde->elem);
+  // 这里是因为，如果要用双向链表，由于类型必须是list_element，
+  // 只能创造一个没啥用的elem在struct file_descripter里，绕一个弯
 
   lock_release (&file_lock);
+  return fde->fd;
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
 int
 filesize (int fd)
 {
-  // 类型不匹配。需要根据fd去找对应的const char *file
+  struct file *f = find_file (fd);
+  if (f == NULL)
+    exit (-1);
+
   return file_length (fd);
 }
 
@@ -233,7 +264,7 @@ read (int fd, void *buffer, unsigned size)
 {
   lock_acquire (&file_lock);
 
-  if (fd == 0)
+  if (fd == STDIN)
     {
       for (unsigned int i = 0; i < size; i++)
           *((char **)buffer)[i] = input_getc ();
@@ -250,10 +281,59 @@ read (int fd, void *buffer, unsigned size)
       lock_release (&file_lock);
       return status;
     }
-
-  
 }
-int write (int fd, const void *buffer, unsigned size);
-void seek (int fd, unsigned position);
-unsigned tell (int fd);
-void close (int fd);
+
+int
+write (int fd, const void *buffer, unsigned size)
+{
+  lock_acquire (&file_lock);
+  if (fd == STDOUT)
+    { 
+      putbuf ((char *)buffer, (size_t)size);
+      lock_release (&file_lock);
+      return (int)size;
+    }
+  else
+    {
+      struct file *f = find_file (fd);
+      if (f == NULL)
+          exit (-1);
+      lock_release (&file_lock);
+      return (int)file_write (f, buffer, size);
+    }
+}
+
+void
+seek (int fd, unsigned position)
+{
+  struct file *f = find_file (fd);
+  if (f == NULL)
+    exit (-1);
+
+  file_seek (f, position);
+}
+
+unsigned
+tell (int fd)
+{
+  struct file *f = find_file (fd);
+  if (f == NULL)
+    exit (-1);
+
+  file_tell (f);
+}
+
+void
+close (int fd)
+{
+  struct file_descripter *f = find_file (fd);
+  lock_acquire (&file_lock);
+
+  if (f == NULL || f->owner != thread_current ()->tid)
+    exit (-1);
+
+  list_remove (&f->elem);
+  file_close (f->file);
+  lock_release (&file_lock);
+  free (f);
+}
