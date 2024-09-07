@@ -21,6 +21,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+// Added by hxy 
 static void push_arguments(void ** esp, int argc , char * argv[],int cmdlength);
 // static int split_cmdline(const char* cmdline,char** argv);
 
@@ -43,18 +44,13 @@ process_execute (const char *file_name)
 
   /*Parse command line and get program(thread) name*/
   char *save_ptr;
-  char *thread_name = malloc(strlen(file_name)+1);
-  // char *thread_name;
-  strlcpy (thread_name, file_name, PGSIZE);
-
-  thread_name = strtok_r(thread_name," ",&save_ptr);
+  file_name = strtok_r (file_name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
-  // tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  // tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
-  free(thread_name);
 
   return tid;
 }
@@ -95,7 +91,7 @@ start_process (void *file_name_)
   if (!success) 
     thread_exit ();
   
-  /* If load succeed, push arguments. */
+  /* If load succeed, push arguments to user stack. */
   else{
     for (token = strtok_r (NULL, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
         argv[argc++] = token;
@@ -105,7 +101,8 @@ start_process (void *file_name_)
     push_arguments(&if_.esp,argc,argv,cmdlength + argc);
   }
   // printf("%d",if_.esp);
-  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp,true);
+  // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp,true);
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -503,6 +500,7 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+
 
 void push_arguments(void ** esp, int argc , char * argv[], int cmdlength){
   int i;

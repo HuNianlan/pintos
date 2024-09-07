@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "list.h": "c",
+        "synch.h": "c",
+        "syscall.h": "c"
+    }
+}
