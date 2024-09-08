@@ -1,14 +1,17 @@
 #include "userprog/syscall.h"
-#include <stdio.h>
+//#include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
-#include "threads/thread.h"
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
-#include "thread/vaddr.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
+#include "devices/shutdown.h"
+#include "devices/input.h"
+#include "lib/kernel/stdio.h"
 
 #define STDIN 0
 #define STDOUT 1
@@ -19,14 +22,6 @@ typedef int pid_t;
 static struct list open_file_list;
 struct lock file_lock;
 
-struct file_descripter
-{
-  int fd;
-  tid_t owner; // used in file close
-  struct file *file;
-  struct list_elem elem;
-  // struct list_elem thread_elem;
-};
 
 /* System Calls for pj2*/
 
@@ -173,7 +168,7 @@ exit (int status)
   struct thread *t = thread_current ();
   struct list_elem *l = list_begin (&t->fd_list);
   t->exit_status = status;
-  printf ("%s:exit(%d)\n", t->name, status);
+//  printf ("%s:exit(%d)\n", t->name, status);
 
   while (!list_empty (&t->fd_list))
     {
@@ -239,7 +234,7 @@ open (const char *file)
   fde->file = f;
   fde->owner = thread_current ()->tid;
 
-  list_push_back(&cur->fd_list,&fde->thread_elem);
+  list_push_back (&cur->fd_list, &fde->thread_elem);
   list_push_back (&open_file_list, &fde->elem);
   // 这里是因为，如果要用双向链表，由于类型必须是list_element，
   // 只能创造一个没啥用的elem在struct file_descripter里，绕一个弯
@@ -256,7 +251,7 @@ filesize (int fd)
   if (f == NULL)
     exit (-1);
 
-  return file_length (fd);
+  return file_length (f);
 }
 
 // 我也不知道为啥。。
@@ -274,7 +269,7 @@ read (int fd, void *buffer, unsigned size)
     }
   else
     {
-      struct file *f = find_file_by_fd (fd);
+      struct file *f = find_file (fd);
 
       if (f == NULL)
           return -1;
