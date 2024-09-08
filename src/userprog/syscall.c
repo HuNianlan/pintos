@@ -42,7 +42,8 @@ void close (int fd);
 static void syscall_handler (struct intr_frame *);
 bool is_valid_pointer(void* ptr);
 static struct file *find_file (int fd);
-int allocate_fd ();
+static struct file_descripter *find_file_descripter (int fd);
+int allocate_fd (void);
 
 void
 syscall_init (void) 
@@ -138,11 +139,21 @@ is_valid_pointer (void *ptr)
 static struct file *
 find_file (int fd)
 {
-  for (struct list_elem *l = list_begin (&open_file_list);
-       l != list_end (&open_file_list); l = list_next (l))
+  struct file_descripter *fde = find_file_descripter (fd);
+  if (fde == NULL)
+    return NULL;
+  return fde->file;
+}
+
+static struct file_descripter *
+find_file_descripter (int fd)
+{
+  struct thread *cur = thread_current ();
+  for (struct list_elem *l = list_begin (&cur->fd_list);
+       l != list_end (&cur->fd_list); l = list_next (l))
     {
-      if (list_entry (l, struct file_descripter, elem)->fd == fd)
-        return list_entry (l, struct file_descripter, elem)->file;
+      if (list_entry (l, struct file_descripter, thread_elem)->fd == fd)
+        return list_entry (l, struct file_descripter, thread_elem);
     }
   return NULL;
 }
@@ -327,7 +338,7 @@ tell (int fd)
 void
 close (int fd)
 {
-  struct file_descripter *f = find_file (fd);
+  struct file_descripter *f = find_file_descripter (fd);
   lock_acquire (&file_lock);
 
   if (f == NULL || f->owner != thread_current ()->tid)

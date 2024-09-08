@@ -314,7 +314,7 @@ thread_exit (void)
 
   process_exit ();
 
-  ASSERT (list_size (&cur->files) == 0);
+  ASSERT (list_size (&cur->fd_list) == 0);
   
   if (cur->parent && cur->parent != initial_thread)
     list_remove (&cur->children_elem);

@@ -95,7 +95,7 @@ struct thread
     struct list_elem elem;              /* List element. */
 
 
-// #ifdef USERPROG
+#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 
@@ -109,7 +109,7 @@ struct thread
     struct list children_list;          /* List of children processes of this thread */
     struct list_elem children_elem;     /* in children list */
 
-// #endif
+#endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
