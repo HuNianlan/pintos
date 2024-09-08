@@ -8,6 +8,7 @@
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "thread/vaddr.h"
 
 #define STDIN 0
 #define STDOUT 1
@@ -114,12 +115,6 @@ syscall_handler (struct intr_frame *f UNUSED)
         case SYS_CLOSE:
           close (*(esp + 1));
           break;
-        case SYS_MMAP:
-          f->eax = mmap (*(esp + 1), (void *)*(esp + 2));
-          break;
-        case SYS_MUNMAP:
-          munmap (*(esp + 1));
-          break;
         default:
           exit(-1);
           break;
@@ -176,8 +171,14 @@ void
 exit (int status)
 {
   struct thread *t = thread_current ();
+  struct list_elem *l = list_begin (&t->fd_list);
   t->exit_status = status;
   printf ("%s:exit(%d)\n", t->name, status);
+
+  while (!list_empty (&t->fd_list))
+    {
+      close (list_entry (l, struct file_descripter, thread_elem)->fd);
+    }
   thread_exit ();
 }
 
@@ -238,7 +239,7 @@ open (const char *file)
   fde->file = f;
   fde->owner = thread_current ()->tid;
 
-  // list_push_back(&cur->fd_list,&fde->thread_elem);
+  list_push_back(&cur->fd_list,&fde->thread_elem);
   list_push_back (&open_file_list, &fde->elem);
   // 这里是因为，如果要用双向链表，由于类型必须是list_element，
   // 只能创造一个没啥用的elem在struct file_descripter里，绕一个弯
@@ -288,16 +289,21 @@ write (int fd, const void *buffer, unsigned size)
 {
   lock_acquire (&file_lock);
   if (fd == STDOUT)
-    { 
+    {
       putbuf ((char *)buffer, (size_t)size);
       lock_release (&file_lock);
       return (int)size;
+    }
+  else if (fd == STDIN)
+    {
+      lock_release (&file_lock);
+      return -1;
     }
   else
     {
       struct file *f = find_file (fd);
       if (f == NULL)
-          exit (-1);
+        exit (-1);
       lock_release (&file_lock);
       return (int)file_write (f, buffer, size);
     }
@@ -332,6 +338,7 @@ close (int fd)
   if (f == NULL || f->owner != thread_current ()->tid)
     exit (-1);
 
+  list_remove (&f->thread_elem);
   list_remove (&f->elem);
   file_close (f->file);
   lock_release (&file_lock);

@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -18,6 +19,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "lib/string.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -44,14 +46,24 @@ process_execute (const char *file_name)
 
   /*Parse command line and get program(thread) name*/
   char *save_ptr;
-  file_name = strtok_r (file_name, " ", &save_ptr);
+  char *thread_name = strtok_r (fn_copy, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  // tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
+  //  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
 
+  struct thread *t = get_thread_by_tid (tid);
+  if (t == NULL)
+    return TID_ERROR;
+  sema_down (&t->wait);
+  if (t->exit_status == -1)
+    return TID_ERROR;
+  // while (t->status == THREAD_BLOCKED)
+  //   thread_unblock (t);
+  // if (t->ret_status == -1)
+  //   process_wait (t->tid); // don't know why
   return tid;
 }
 
@@ -60,7 +72,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  
+  struct thread *t = thread_current ();
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -88,9 +100,13 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
-  
+  if (!success)
+    {
+      t->exit_status = -1;
+      sema_up (&t->wait);
+      thread_exit ();
+    }
+
   /* If load succeed, push arguments to user stack. */
   else{
     for (token = strtok_r (NULL, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
@@ -99,6 +115,8 @@ start_process (void *file_name_)
         // printf ("'%s'\n", token);
       }
     push_arguments(&if_.esp,argc,argv,cmdlength + argc);
+    sema_up (&t->wait);
+
   }
   // printf("%d",if_.esp);
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp,true);
@@ -123,9 +141,25 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid UNUSED)
 {
-  return -1;
+  // return -1;
+  struct thread *t = get_thread_by_tid (child_tid);
+  struct thread *cur = thread_current ();
+  if (t == NULL || t->parent != cur || t->status == THREAD_DYING
+      || t->exit_status == -1)
+    {
+      t->exit_status = -1;
+      return -1;
+    }
+  else if (t->exit_status != 0 && t->exit_status == -1)
+    {
+      return t->exit_status;
+    }
+
+  sema_down (&t->wait);
+
+  return t->exit_status;
 }
 
 /* Free the current process's resources. */
@@ -134,6 +168,15 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  while (!list_empty (&cur->wait.waiters))
+    sema_up (&cur->wait);
+
+  struct list_elem *l = list_begin (&cur->fd_list);
+  while (!list_empty (&cur->fd_list))
+    {
+      close (list_entry (l, struct file_descripter, thread_elem)->fd);
+    }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

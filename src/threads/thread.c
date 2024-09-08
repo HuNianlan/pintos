@@ -201,6 +201,16 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+#ifdef USERPROG
+  sema_init (&t->wait, 0);
+  t->exit_status = 0;
+  list_init (&t->fd_list);
+  list_init (&t->children_list);
+  if (thread_current () != initial_thread)
+    list_push_back (&thread_current ()->children_list, &t->children_elem);
+  t->parent = thread_current ();
+#endif
+
   return tid;
 }
 
@@ -283,7 +293,31 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  struct list_elem *l;
+  struct thread *t, *cur;
+  
+  cur = thread_current ();
+
+  for (l = list_begin (&cur->children_list); l != list_end (&cur->children_list); l = list_next (l))
+    {
+      t = list_entry (l, struct thread, children_elem);
+      if (t->status == THREAD_BLOCKED)
+        thread_unblock (t);
+      else
+        {
+          t->parent = NULL;
+          list_remove (&t->children_elem);
+        }
+        
+    }
+
   process_exit ();
+
+  ASSERT (list_size (&cur->files) == 0);
+  
+  if (cur->parent && cur->parent != initial_thread)
+    list_remove (&cur->children_elem);
+
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -582,3 +616,21 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+struct thread *
+get_thread_by_tid (tid_t tid)
+{
+  struct list_elem *f;
+  struct thread *t;
+
+  for (f = list_begin (&all_list); f != list_end (&all_list);
+       f = list_next (f))
+    {
+      t = list_entry (f, struct thread, allelem);
+      ASSERT (is_thread (t));
+      if (t->tid == tid)
+        return t;
+    }
+
+  return NULL;
+}
