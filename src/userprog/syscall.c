@@ -332,7 +332,7 @@ tell (int fd)
   if (f == NULL)
     exit (-1);
 
-  file_tell (f);
+  return file_tell (f);
 }
 
 void

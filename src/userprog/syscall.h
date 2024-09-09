@@ -18,6 +18,6 @@ void syscall_init (void);
 void exit (int status);
 void close (int fd);
 
-struct lock file_lock;
+extern struct lock file_lock;
 
 #endif /* userprog/syscall.h */
