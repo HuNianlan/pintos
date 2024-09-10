@@ -183,6 +183,22 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  printf ("thread create.\n");
+#ifdef USERPROG
+  // if (thread_current () != initial_thread)
+  //   {
+  printf ("thread_create userprog 11\n");
+  enum intr_level old_level = intr_disable ();
+  printf ("thread_create userprog 22\n");
+  list_push_front (&thread_current ()->children_list, &t->children_elem);
+  printf ("thread_create userprog 33333\n");
+  printf ("child added to list.\n");
+  intr_set_level (old_level);
+  // }
+
+  t->parent = thread_current ();
+#endif
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -463,6 +479,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+#ifdef USERPROG
+  sema_init (&t->wait, 0);
+  t->exit_status = 0;
+  list_init (&t->children_list);
+#endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
