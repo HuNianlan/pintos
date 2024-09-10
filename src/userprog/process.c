@@ -32,7 +32,7 @@ struct thread* get_child_thread (tid_t child_tid);
 tid_t
 process_execute (const char *file_name) 
 {
-  printf("process excute 1\n");
+  // printf("process excute 1\n");
   char *fn_copy;
   tid_t tid;
 
@@ -55,21 +55,21 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy);
   free(thread_name);
 
-  printf("process excute 2\n");
+  // printf("process excute 2\n");
 
   struct thread *child_thread = get_child_thread (tid);
 
-  printf("process excute 3\n");
+  // printf("process excute 3\n");
   if (child_thread == NULL)
     {
-      printf ("NO child\n");
+      // printf ("NO child\n");
       tid = TID_ERROR;
       palloc_free_page (fn_copy);
     }
 
 
   sema_down (&child_thread->wait);
-  printf("After sema down in process excute\n");
+  // printf("After sema down in process excute\n");
   return tid;
 }
 
@@ -147,24 +147,26 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  printf("Enter process_wait.\n");
-  struct thread *child_thread = get_child_thread (child_tid);
-  printf("get child\n");
-  if (child_thread == NULL || child_thread->status == THREAD_DYING)
-    {
-      printf("No child process wait\n");
-      return -1;
-    }
-  // sema_down (&child_thread->wait);
-  printf ("%s: exit in process_wait (%d)\n", child_thread->name,
-          child_thread->exit_status);
-  return child_thread->exit_status;
+  // printf("Enter process_wait.\n");
+  // struct thread *child_thread = get_child_thread (child_tid);
+  // printf("get child\n");
+  // if (child_thread == NULL || child_thread->status == THREAD_DYING)
+  //   {
+  //     printf("No child process wait\n");
+  //     return -1;
+  //   }
+  // // sema_down (&child_thread->wait);
+  // printf ("%s: exit in process_wait (%d)\n", child_thread->name,
+  //         child_thread->exit_status);
+  // return child_thread->exit_status;
+  // printf("exit!\n");
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
+  // printf("Enter process_exit.\n");
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
@@ -571,26 +573,26 @@ void push_arguments(void ** esp, int argc , char * argv[], int cmdlength){
 struct thread *
 get_child_thread (tid_t child_tid)
 {
-  printf ("Getting child thread\n");
+  // printf ("Getting child thread\n");
   struct thread *child_thread = NULL;
   struct list_elem *temp;
 
   /* Look to see if the child thread in question is our child. */
   if (list_empty (&thread_current ()->children_list))
     {
-      printf ("empty child list");
+      // printf ("empty child list");
       return NULL;
     }
-  printf ("not list empty\n");
-  printf("child_id %i\n",child_tid);
+  // printf ("not list empty\n");
+  // printf("child_id %i\n",child_tid);
   for (temp = list_front (&thread_current ()->children_list); temp != NULL;
        temp = temp->next)
     {
       child_thread = list_entry (temp, struct thread, children_elem);
-      printf("finding, this child id is %i\n",child_thread->tid);
+      // printf("finding, this child id is %i\n",child_thread->tid);
       if (child_thread->tid == child_tid)
         {
-          printf ("child found\n");
+          // printf ("child found\n");
           return child_thread;
         }
     }

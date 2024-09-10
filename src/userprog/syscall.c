@@ -116,7 +116,7 @@ exit (int status)
   struct thread *t = thread_current ();
   // struct list_elem *l = list_begin (&t->fd_list);
   t->exit_status = status;
-  printf ("%s:exit(%d)\n", t->name, status);
+  printf ("%s: exit(%d)\n", t->name, status);
 
   thread_exit ();
 }
