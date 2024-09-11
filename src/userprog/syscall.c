@@ -30,7 +30,6 @@ static struct file_descripter *find_file_descripter (int fd);
 static struct file *find_file (int fd);
 
 static void halt (void);
-static void exit (int status);
 static pid_t exec (const char *cmd_line);
 static int wait (pid_t pid);
 static bool create (const char *file, unsigned initial_size);
@@ -133,7 +132,7 @@ halt (void)
   shutdown_power_off ();
 }
 
-static void
+void
 exit (int status)
 {
   struct thread *t = thread_current ();

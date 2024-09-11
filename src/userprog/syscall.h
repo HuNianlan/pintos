@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 
 void syscall_init (void);
+void exit (int status);
 
 struct file_descripter
 {
