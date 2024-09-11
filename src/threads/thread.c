@@ -183,6 +183,12 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  /*maitain parent-child relationship*/ 
+#ifdef USERPROG
+  list_push_front (&thread_current ()->children, &t->children_elem);
+  t->parent = thread_current ();
+#endif
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -463,6 +469,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+#ifdef USERPROG
+  t->status_exit = -1;
+  list_init(&t->children);
+  list_init(&t->fds);
+  sema_init(&t->wait,0);
+#endif
+
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

@@ -4,6 +4,12 @@
         "thread.h": "c",
         "vaddr.h": "c",
         "palloc.h": "c",
-        "interrupt.h": "c"
+        "interrupt.h": "c",
+        "*.inc": "c",
+        "atomic": "c",
+        "syscall.h": "c",
+        "synch.h": "c",
+        "filesys.h": "c",
+        "shutdown.h": "c"
     }
 }
