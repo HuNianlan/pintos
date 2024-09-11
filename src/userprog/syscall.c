@@ -5,6 +5,9 @@
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "devices/shutdown.h"
 
 #define STDIN 0
 #define STDOUT 1
@@ -16,16 +19,16 @@ static void syscall_handler (struct intr_frame *);
 bool is_valid_pointer (void *ptr);
 bool is_valid_buffer (const void *buffer, unsigned size);
 
-// void halt (void);
-void exit (int status);
+static void halt (void);
+static void exit (int status);
 // pid_t exec (const char *cmd_line);
 // int wait (pid_t pid);
-// bool create (const char *file, unsigned initial_size);
+static bool create (const char *file, unsigned initial_size);
 // bool remove (const char *file);
 // int open (const char *file);
 // int filesize (int fd);
 // int read (int fd, void *buffer, unsigned size);
-int write (int fd, const void *buffer, unsigned size);
+static int write (int fd, const void *buffer, unsigned size);
 // void seek (int fd, unsigned position);
 // unsigned tell (int fd);
 // void close (int fd);
@@ -53,9 +56,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       int syscall_number = *esp;
       switch (syscall_number)
         {
-        // case SYS_HALT:
-        //   halt ();
-        //   break;
+        case SYS_HALT:
+          halt ();
+          break;
         case SYS_EXIT:
           exit (*(esp + 1));
           break;
@@ -65,9 +68,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         // case SYS_WAIT:
         //   f->eax = wait (*(esp + 1));
         //   break;
-        // case SYS_CREATE:
-        //   f->eax = create ((char *)*(esp + 1), *(esp + 2));
-        //   break;
+        case SYS_CREATE:
+          f->eax = create ((char *)*(esp + 1), *(esp + 2));
+          break;
         // case SYS_REMOVE:
         //   f->eax = remove ((char *)*(esp + 1));
         //   break;
@@ -110,18 +113,24 @@ is_valid_pointer (void *ptr)
   return true;
 }
 
-void
+static void
+halt (void)
+{
+  shutdown_power_off ();
+}
+
+static void
 exit (int status)
 {
   struct thread *t = thread_current ();
   // struct list_elem *l = list_begin (&t->fd_list);
   t->exit_status = status;
-  printf ("%s: exit(%d)\n", t->name, status);
+  // printf ("%s: exit(%d)\n", t->name, status);
 
   thread_exit ();
 }
 
-int
+static int
 write (int fd, const void *buffer, unsigned size)
 {
   if (!is_valid_buffer (buffer, size))
@@ -138,13 +147,29 @@ write (int fd, const void *buffer, unsigned size)
       // lock_release (&file_lock);
       return -1;
     }
+  return -1;
+}
+
+/* Creates a new file called file initially initial_size bytes in size. Returns
+ * true if successful, false otherwise. Creating a new file does not open it:
+ * opening the new file is a separate operation which would require a open
+ * system call.*/
+static bool
+create (const char *file, unsigned initial_size)
+{
+  // printf ("call create %s\n", file);
+  if (file == NULL)
+  {
+    exit(-1);
     return -1;
+  }
+  return filesys_create (file, initial_size);
 }
 
 bool
 is_valid_buffer (const void *buffer, unsigned size)
 {
-  void *ptr = (void*)buffer;
+  void *ptr = (void *)buffer;
   for (unsigned i = 0; i < size; i++)
     {
       if (!is_valid_pointer ((void *)ptr))

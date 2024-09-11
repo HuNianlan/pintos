@@ -186,16 +186,14 @@ thread_create (const char *name, int priority,
   // printf ("thread create.\n");
 
 #ifdef USERPROG
-  // if (thread_current () == initial_thread)
-  //   {
-      // printf ("thread_create userprog 11\n");
-      enum intr_level old_level = intr_disable ();
-      list_push_front (&thread_current ()->children_list, &t->children_elem);
-      // printf ("child added to list.\n");
-      intr_set_level (old_level);
-    // }
-
+  sema_init (&t->wait, 0);
+  t->exit_status = RET_STATUS_DEFAULT;
+  // list_init (&t->files);
+  list_init (&t->children_list);
+  if (thread_current () != initial_thread)
+    list_push_back (&thread_current ()->children_list, &t->children_elem);
   t->parent = thread_current ();
+  // t->exited = false;
 #endif
 
   /* Stack frame for kernel_thread(). */
@@ -479,11 +477,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-#ifdef USERPROG
-  sema_init (&t->wait, 0);
-  t->exit_status = 0;
-  list_init (&t->children_list);
-#endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -603,3 +596,22 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+struct thread *
+get_thread_by_tid (tid_t tid)
+{
+  struct list_elem *f;
+  struct thread *ret;
+  
+  ret = NULL;
+  for (f = list_begin (&all_list); f != list_end (&all_list); f = list_next (f))
+    {
+      ret = list_entry (f, struct thread, allelem);
+      ASSERT (is_thread (ret));
+      // printf("thread id: %i\n",ret->tid);
+      if (ret->tid == tid)
+        return ret;
+    }
+    
+  return NULL;
+}

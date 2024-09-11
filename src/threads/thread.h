@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include "threads/synch.h"
 
+# define RET_STATUS_DEFAULT 0xcdcdcdcd
+# define RET_STATUS_INVALID 0xdcdcdcdc
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -145,4 +148,8 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+struct thread *
+get_thread_by_tid (tid_t tid);
+
 #endif /* threads/thread.h */
+
