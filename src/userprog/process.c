@@ -23,6 +23,7 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void push_arguments(void ** esp, int argc , char * argv[],int cmdlength);
+struct thread* get_child_thread (tid_t child_tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -31,6 +32,7 @@ static void push_arguments(void ** esp, int argc , char * argv[],int cmdlength);
 tid_t
 process_execute (const char *file_name) 
 {
+  // printf("process excute 1\n");
   char *fn_copy;
   tid_t tid;
 
@@ -50,8 +52,24 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
   free(thread_name);
+
+  // printf("process excute 2\n");
+
+  struct thread *child_thread = get_child_thread (tid);
+
+  // printf("process excute 3\n");
+  if (child_thread == NULL)
+    {
+      // printf ("NO child\n");
+      tid = TID_ERROR;
+      palloc_free_page (fn_copy);
+    }
+
+
+  sema_down (&child_thread->wait);
+  // printf("After sema down in process excute\n");
   return tid;
 }
 
@@ -84,16 +102,24 @@ start_process (void *file_name_)
 
   success = load (file_name, &if_.eip, &if_.esp);
 
+  struct thread *t = thread_current ();
   /* If load failed, quit. */
-  if (!success) 
-    thread_exit ();
+  if (!success)
+    {
+      t->status_exit = -1;
+      sema_up (&t->wait);
+      thread_exit ();
+    }
+
   /* If load succeed, push arguments. */
-  else{
-    if_.esp -=12;
-    // if_.esp = pass_argument(argv)
-  // }
-    push_arguments(&if_.esp,argc,argv,cmdlength+ argc);
-  }
+  else
+    {
+      if_.esp -= 12;
+      // if_.esp = pass_argument(argv)
+      // }
+      push_arguments (&if_.esp, argc, argv, cmdlength + argc);
+      sema_up (&t->wait);
+    }
   palloc_free_page (file_name);
 
   // printf("%d",if_.esp);
@@ -119,14 +145,21 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid UNUSED)
 {
-  while (1)
-  {
-    /* code */
-  }
-  
-  return -1;
+  // printf("Enter process_wait.\n");
+  // struct thread *child_thread = get_child_thread (child_tid);
+  // printf("get child\n");
+  // if (child_thread == NULL || child_thread->status == THREAD_DYING)
+  //   {
+  //     printf("No child process wait\n");
+  //     return -1;
+  //   }
+  // // sema_down (&child_thread->wait);
+  // printf ("%s: exit in process_wait (%d)\n", child_thread->name,
+  //         child_thread->exit_status);
+  // return child_thread->exit_status;
+  // printf("exit!\n");
 }
 
 /* Free the current process's resources. */
@@ -134,6 +167,8 @@ void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
+  printf("%s: exit(%d)\n",cur->name,cur->status_exit);
+
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
@@ -534,4 +569,33 @@ void push_arguments(void ** esp, int argc , char * argv[], int cmdlength){
   *esp-=4;
   *(uint32_t*)*esp = 0;
 
+}
+
+struct thread *
+get_child_thread (tid_t child_tid)
+{
+  // printf ("Getting child thread\n");
+  struct thread *child_thread = NULL;
+  struct list_elem *temp;
+
+  /* Look to see if the child thread in question is our child. */
+  if (list_empty (&thread_current ()->children))
+    {
+      // printf ("empty child list");
+      return NULL;
+    }
+  // printf ("not list empty\n");
+  // printf("child_id %i\n",child_tid);
+  for (temp = list_front (&thread_current ()->children); temp != NULL;
+       temp = temp->next)
+    {
+      child_thread = list_entry (temp, struct thread, children_elem);
+      // printf("finding, this child id is %i\n",child_thread->tid);
+      if (child_thread->tid == child_tid)
+        {
+          // printf ("child found\n");
+          return child_thread;
+        }
+    }
+  return NULL;
 }
