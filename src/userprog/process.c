@@ -80,9 +80,7 @@ process_execute (const char *file_name)
     thread_unblock (t);
   if (t->exit_status == -1)
     process_wait (t->tid);
-  
-done:
-  /* == My Implementation */
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -132,10 +130,11 @@ start_process (void *file_name_)
   /* If load succeed, push arguments. */
   else
     {
-      if_.esp -= 12;
-      // if_.esp = pass_argument(argv)
-      // }
       push_arguments (&if_.esp, argc, argv, cmdlength + argc);
+
+      struct file *file = filesys_open (file_name);
+      file_deny_write (file);
+
       sema_up (&t->wait);
       intr_disable ();
       thread_block ();

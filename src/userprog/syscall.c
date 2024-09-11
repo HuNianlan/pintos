@@ -34,13 +34,13 @@ static void exit (int status);
 static pid_t exec (const char *cmd_line);
 static int wait (pid_t pid);
 static bool create (const char *file, unsigned initial_size);
-// bool remove (const char *file);
+static bool remove (const char *file);
 static int open (const char *file);
 static int filesize (int fd);
 static int read (int fd, void *buffer, unsigned size);
 static int write (int fd, const void *buffer, unsigned size);
-// void seek (int fd, unsigned position);
-// unsigned tell (int fd);
+static void seek (int fd, unsigned position);
+static unsigned tell (int fd);
 static void close (int fd);
 
 void
@@ -83,9 +83,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         case SYS_CREATE:
           f->eax = create ((char *)*(esp + 1), *(esp + 2));
           break;
-        // case SYS_REMOVE:
-        //   f->eax = remove ((char *)*(esp + 1));
-        //   break;
+        case SYS_REMOVE:
+          f->eax = remove ((char *)*(esp + 1));
+          break;
         case SYS_OPEN:
           f->eax = open ((char *)*(esp + 1));
           break;
@@ -93,18 +93,17 @@ syscall_handler (struct intr_frame *f UNUSED)
           f->eax = filesize (*(esp + 1));
           break;
         case SYS_READ:
-        // printf("ready to read\n");
           f->eax = read (*(esp + 1), (void *)*(esp + 2), *(esp + 3));
           break;
         case SYS_WRITE:
           f->eax = write (*(esp + 1), (void *)*(esp + 2), *(esp + 3));
           break;
-        // case SYS_SEEK:
-        //   seek (*(esp + 1), *(esp + 2));
-        //   break;
-        // case SYS_TELL:
-        //   f->eax = tell (*(esp + 1));
-        //   break;
+        case SYS_SEEK:
+          seek (*(esp + 1), *(esp + 2));
+          break;
+        case SYS_TELL:
+          f->eax = tell (*(esp + 1));
+          break;
         case SYS_CLOSE:
           close (*(esp + 1));
           break;
@@ -151,10 +150,10 @@ write (int fd, const void *buffer, unsigned size)
   if (buffer == NULL || !is_valid_buffer(buffer, size))
   {
     exit(-1);
-    return -1;
   }
 
   lock_acquire (&file_lock);
+
 
   if (fd == STDOUT) // writes to the console
     {
@@ -170,13 +169,13 @@ write (int fd, const void *buffer, unsigned size)
   else
     {
       struct file *f = find_file (fd);
-
       if (f == NULL)
         {
           // printf ("file not found.\n");
           lock_release (&file_lock);
           return -1;
         }
+
       int status = file_write (f, buffer, size);
       lock_release (&file_lock);
       return status;
@@ -194,7 +193,6 @@ create (const char *file, unsigned initial_size)
   if (file == NULL || !is_valid_pointer(file))
   {
     exit(-1);
-    return -1;
   }
   return filesys_create (file, initial_size);
 }
@@ -205,7 +203,6 @@ open (const char *file)
   if (file == NULL || !is_valid_pointer(file))
   {
     exit(-1);
-    return -1;
   }
   // printf("file name: %s\n", file);
 
@@ -263,7 +260,6 @@ read (int fd, void *buffer, unsigned size)
   if (buffer == NULL || !is_valid_buffer(buffer, size))
   {
     exit(-1);
-    return -1;
   }
 
   lock_acquire (&file_lock);
@@ -306,13 +302,32 @@ static int filesize (int fd)
   return file_length (f);
 }
 
+static void
+seek (int fd, unsigned position)
+{
+  struct file *f = find_file (fd);
+  if (f == NULL)
+    exit (-1);
+
+  file_seek (f, position);
+}
+
+static unsigned
+tell (int fd)
+{
+  struct file *f = find_file (fd);
+  if (f == NULL)
+    exit (-1);
+
+  return file_tell (f);
+}
+
 static pid_t
 exec (const char *cmd_line)
 {
   if (cmd_line == NULL || !is_valid_pointer (cmd_line))
     {
       exit (-1);
-      return -1;
     }
 
   lock_acquire (&file_lock);
@@ -330,6 +345,12 @@ wait (pid_t pid)
       exit (-1);
     }
   return process_wait (pid);
+}
+
+static bool
+remove (const char *file)
+{
+  return filesys_remove (file);
 }
 
 bool
