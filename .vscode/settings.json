@@ -6,6 +6,7 @@
         "palloc.h": "c",
         "interrupt.h": "c",
         "filesys.h": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "lib.h": "c"
     }
 }

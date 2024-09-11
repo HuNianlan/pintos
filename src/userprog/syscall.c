@@ -10,6 +10,7 @@
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "threads/malloc.h"
+#include "userprog/process.h"
 
 #define STDIN 0
 #define STDOUT 1
@@ -31,7 +32,7 @@ static struct file *find_file (int fd);
 static void halt (void);
 static void exit (int status);
 static pid_t exec (const char *cmd_line);
-// int wait (pid_t pid);
+static int wait (pid_t pid);
 static bool create (const char *file, unsigned initial_size);
 // bool remove (const char *file);
 static int open (const char *file);
@@ -76,9 +77,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         case SYS_EXEC:
           f->eax = exec ((char *)*(esp + 1));
           break;
-        // case SYS_WAIT:
-        //   f->eax = wait (*(esp + 1));
-        //   break;
+        case SYS_WAIT:
+          f->eax = wait (*(esp + 1));
+          break;
         case SYS_CREATE:
           f->eax = create ((char *)*(esp + 1), *(esp + 2));
           break;
@@ -118,7 +119,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 bool
 is_valid_pointer (const void *ptr)
 {
-  printf("%d\n",pagedir_get_page (thread_current ()->pagedir, ptr));
+  // printf("%d\n",pagedir_get_page (thread_current ()->pagedir, ptr));
   if (ptr == NULL || !is_user_vaddr (ptr)
       || pagedir_get_page (thread_current ()->pagedir, ptr) == NULL
       || ptr < (void *)0x08048000)
@@ -207,14 +208,14 @@ open (const char *file)
     return -1;
   }
   // printf("file name: %s\n", file);
-  lock_acquire (&file_lock);
+
   struct file *f = filesys_open (file);
 
   if (f == NULL)
     {
       return -1;
     }
-
+  lock_acquire (&file_lock);
   struct file_descripter *fd = malloc (sizeof (struct file_descripter));
   if (fd == NULL)
     {
@@ -308,10 +309,27 @@ static int filesize (int fd)
 static pid_t
 exec (const char *cmd_line)
 {
+  if (cmd_line == NULL || !is_valid_pointer (cmd_line))
+    {
+      exit (-1);
+      return -1;
+    }
+
   lock_acquire (&file_lock);
   int status = process_execute (cmd_line);
   lock_release (&file_lock);
   return status;
+}
+
+static int
+wait (pid_t pid)
+{
+  struct thread *t = get_thread_by_tid (pid);
+  if (t == NULL)
+    {
+      exit (-1);
+    }
+  return process_wait (pid);
 }
 
 bool
