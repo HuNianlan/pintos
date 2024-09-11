@@ -188,7 +188,7 @@ thread_create (const char *name, int priority,
 #ifdef USERPROG
   sema_init (&t->wait, 0);
   t->exit_status = RET_STATUS_DEFAULT;
-  // list_init (&t->files);
+  list_init (&t->fd_list);
   list_init (&t->children_list);
   if (thread_current () != initial_thread)
     list_push_back (&thread_current ()->children_list, &t->children_elem);

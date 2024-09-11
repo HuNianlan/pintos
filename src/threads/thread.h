@@ -106,6 +106,7 @@ struct thread
     struct list children_list;
     struct list_elem children_elem; 
     struct thread *parent; 
+    struct list fd_list;
 #endif
 
     /* Owned by thread.c. */

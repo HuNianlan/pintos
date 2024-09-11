@@ -5,6 +5,7 @@
         "vaddr.h": "c",
         "palloc.h": "c",
         "interrupt.h": "c",
-        "filesys.h": "c"
+        "filesys.h": "c",
+        "*.inc": "c"
     }
 }

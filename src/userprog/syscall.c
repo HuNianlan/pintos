@@ -8,35 +8,46 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "devices/shutdown.h"
+#include "devices/input.h"
+#include "threads/malloc.h"
 
 #define STDIN 0
 #define STDOUT 1
 
 typedef int pid_t;
 
+/* Store all the current opened file*/
+static struct list open_file_list;
+struct lock file_lock;
+
 static void syscall_handler (struct intr_frame *);
 
-bool is_valid_pointer (void *ptr);
-bool is_valid_buffer (const void *buffer, unsigned size);
+static bool is_valid_pointer (const void *ptr);
+static bool is_valid_buffer (const void *buffer, unsigned size);
+static int allocate_fd (void);
+static struct file_descripter *find_file_descripter (int fd);
+static struct file *find_file (int fd);
 
 static void halt (void);
 static void exit (int status);
-// pid_t exec (const char *cmd_line);
+static pid_t exec (const char *cmd_line);
 // int wait (pid_t pid);
 static bool create (const char *file, unsigned initial_size);
 // bool remove (const char *file);
-// int open (const char *file);
-// int filesize (int fd);
-// int read (int fd, void *buffer, unsigned size);
+static int open (const char *file);
+static int filesize (int fd);
+static int read (int fd, void *buffer, unsigned size);
 static int write (int fd, const void *buffer, unsigned size);
 // void seek (int fd, unsigned position);
 // unsigned tell (int fd);
-// void close (int fd);
+static void close (int fd);
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  list_init(&open_file_list);
+  lock_init(&file_lock);
 }
 
 static void
@@ -62,9 +73,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         case SYS_EXIT:
           exit (*(esp + 1));
           break;
-        // case SYS_EXEC:
-        //   f->eax = exec ((char *)*(esp + 1));
-        //   break;
+        case SYS_EXEC:
+          f->eax = exec ((char *)*(esp + 1));
+          break;
         // case SYS_WAIT:
         //   f->eax = wait (*(esp + 1));
         //   break;
@@ -74,15 +85,16 @@ syscall_handler (struct intr_frame *f UNUSED)
         // case SYS_REMOVE:
         //   f->eax = remove ((char *)*(esp + 1));
         //   break;
-        // case SYS_OPEN:
-        //   f->eax = open ((char *)*(esp + 1));
-        //   break;
-        // case SYS_FILESIZE:
-        //   f->eax = filesize (*(esp + 1));
-        //   break;
-        // case SYS_READ:
-        //   f->eax = read (*(esp + 1), (void *)*(esp + 2), *(esp + 3));
-        //   break;
+        case SYS_OPEN:
+          f->eax = open ((char *)*(esp + 1));
+          break;
+        case SYS_FILESIZE:
+          f->eax = filesize (*(esp + 1));
+          break;
+        case SYS_READ:
+        // printf("ready to read\n");
+          f->eax = read (*(esp + 1), (void *)*(esp + 2), *(esp + 3));
+          break;
         case SYS_WRITE:
           f->eax = write (*(esp + 1), (void *)*(esp + 2), *(esp + 3));
           break;
@@ -92,9 +104,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         // case SYS_TELL:
         //   f->eax = tell (*(esp + 1));
         //   break;
-        // case SYS_CLOSE:
-        //   close (*(esp + 1));
-        //   break;
+        case SYS_CLOSE:
+          close (*(esp + 1));
+          break;
         default:
           exit (-1);
           break;
@@ -104,7 +116,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 /* check ptr when accessing user memory */
 bool
-is_valid_pointer (void *ptr)
+is_valid_pointer (const void *ptr)
 {
   if (ptr == NULL || !is_user_vaddr (ptr)
       || pagedir_get_page (thread_current ()->pagedir, ptr) == NULL
@@ -133,19 +145,38 @@ exit (int status)
 static int
 write (int fd, const void *buffer, unsigned size)
 {
-  if (!is_valid_buffer (buffer, size))
-    exit (-1);
+  if (buffer == NULL || !is_valid_buffer(buffer, size))
+  {
+    exit(-1);
+    return -1;
+  }
 
-  if (fd == STDOUT)
+  lock_acquire (&file_lock);
+
+  if (fd == STDOUT) // writes to the console
     {
       putbuf ((char *)buffer, (size_t)size);
-      // lock_release (&file_lock);
+      lock_release (&file_lock);
       return size;
     }
   else if (fd == STDIN)
     {
-      // lock_release (&file_lock);
+      lock_release (&file_lock);
       return -1;
+    }
+  else
+    {
+      struct file *f = find_file (fd);
+
+      if (f == NULL)
+        {
+          // printf ("file not found.\n");
+          lock_release (&file_lock);
+          return -1;
+        }
+      int status = file_write (f, buffer, size);
+      lock_release (&file_lock);
+      return status;
     }
   return -1;
 }
@@ -158,12 +189,128 @@ static bool
 create (const char *file, unsigned initial_size)
 {
   // printf ("call create %s\n", file);
-  if (file == NULL)
+  if (file == NULL || !is_valid_pointer(file))
   {
     exit(-1);
     return -1;
   }
   return filesys_create (file, initial_size);
+}
+
+static int
+open (const char *file)
+{
+  if (file == NULL || !is_valid_pointer(file))
+  {
+    exit(-1);
+    return -1;
+  }
+  // printf("file name: %s\n", file);
+  lock_acquire (&file_lock);
+  struct file *f = filesys_open (file);
+
+  if (f == NULL)
+    {
+      return -1;
+    }
+
+  struct file_descripter *fd = malloc (sizeof (struct file_descripter));
+  if (fd == NULL)
+    {
+      // printf("malloc failed\n");
+      file_close (f);
+      lock_release (&file_lock);
+      return -1; // open fail
+    }
+  struct thread *cur = thread_current ();
+  fd->fd = allocate_fd ();
+  fd->file = f;
+  fd->owner = thread_current ()->tid;
+
+  list_push_back (&cur->fd_list, &fd->thread_elem);
+  list_push_back (&open_file_list, &fd->elem);
+
+  lock_release (&file_lock);
+  return fd->fd;
+}
+
+void
+close (int fd)
+{
+  struct file_descripter *fd_found = find_file_descripter (fd);
+
+  if (fd_found == NULL || fd_found->owner != thread_current ()->tid)
+    exit (-1);
+
+  lock_acquire (&file_lock);
+  list_remove (&fd_found->thread_elem);
+  list_remove (&fd_found->elem);
+  file_close (fd_found->file);
+  lock_release (&file_lock);
+  free (fd_found);
+}
+
+/* Reads size bytes from the file open as fd into buffer. Returns the number of
+ * bytes actually read (0 at end of file), or -1 if the file could not be read
+ * (due to a condition other than end of file). Fd 0 reads from the keyboard
+ * using input_getc().*/
+static int
+read (int fd, void *buffer, unsigned size)
+{
+  // printf("enter read\n");
+  if (buffer == NULL || !is_valid_buffer(buffer, size))
+  {
+    exit(-1);
+    return -1;
+  }
+
+  lock_acquire (&file_lock);
+
+  if (fd == STDIN) // reads from the keyboard
+    {
+      for (unsigned i = 0; i < size; i++)
+        *((char **)buffer)[i] = input_getc ();
+      lock_release (&file_lock);
+      return size;
+    }
+  else if (fd == STDOUT)
+    {
+      lock_release (&file_lock);
+      return -1;
+    }
+  else // read from file
+    {
+      // printf ("file read \n");
+      struct file *f = find_file (fd);
+
+      if (f == NULL)
+        {
+          // printf ("file not found.\n");
+          lock_release (&file_lock);
+          return -1;
+        }
+      int status = file_read (f, buffer, size);
+      lock_release (&file_lock);
+      return status;
+    }
+}
+
+static int filesize (int fd)
+{
+  struct file *f = find_file (fd);
+  if (f == NULL)
+    exit (-1);
+
+  return file_length (f);
+}
+
+static pid_t
+exec (const char *cmd_line)
+{
+  lock_acquire (&file_lock);
+  int status = process_execute (cmd_line);
+  lock_release (&file_lock);
+  return status;
 }
 
 bool
@@ -178,3 +325,33 @@ is_valid_buffer (const void *buffer, unsigned size)
     }
   return true;
 }
+
+int
+allocate_fd ()
+{
+  static int fd = 1;
+  return ++fd;
+}
+
+static struct file_descripter *
+find_file_descripter (int fd)
+{
+  struct thread *cur = thread_current ();
+  for (struct list_elem *l = list_begin (&cur->fd_list);
+       l != list_end (&cur->fd_list); l = list_next (l))
+    {
+      if (list_entry (l, struct file_descripter, thread_elem)->fd == fd)
+        return list_entry (l, struct file_descripter, thread_elem);
+    }
+  return NULL;
+}
+
+static struct file *
+find_file (int fd)
+{
+  struct file_descripter *fde = find_file_descripter (fd);
+  if (fde == NULL)
+    return NULL;
+  return fde->file;
+}
+
