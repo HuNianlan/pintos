@@ -118,10 +118,12 @@ syscall_handler (struct intr_frame *f UNUSED)
 bool
 is_valid_pointer (const void *ptr)
 {
+  printf("%d\n",pagedir_get_page (thread_current ()->pagedir, ptr));
   if (ptr == NULL || !is_user_vaddr (ptr)
       || pagedir_get_page (thread_current ()->pagedir, ptr) == NULL
       || ptr < (void *)0x08048000)
-    return false;
+      // printf ("call creatce\n");
+        return false;
   return true;
 }
 
@@ -188,7 +190,6 @@ write (int fd, const void *buffer, unsigned size)
 static bool
 create (const char *file, unsigned initial_size)
 {
-  // printf ("call create %s\n", file);
   if (file == NULL || !is_valid_pointer(file))
   {
     exit(-1);
