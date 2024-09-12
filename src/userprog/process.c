@@ -55,28 +55,11 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy);
   free(thread_name);
 
-  // printf("process excute 2\n");
-
-  // struct thread *child_thread = get_child_thread (tid);
-
-  // // printf("process excute 3\n");
-  // if (child_thread == NULL)// not a child or has already been killed or exit
-  //   {
-  //     // printf ("NO child\n");
-  //     tid = TID_ERROR;
-  //     palloc_free_page (fn_copy);
-  //   }
-
-
-  // sema_down (&child_thread->wait);
-  // printf("After sema down in process excute\n");
-  // return tid;
-  /* Wait for child thread to load */
  struct thread * t = get_thread_by_tid (tid);
   sema_down (&t->wait);
   if (t->exit_status == -1)
     tid = TID_ERROR;
-  while (t->status == THREAD_BLOCKED)
+  if (t->status == THREAD_BLOCKED)
     thread_unblock (t);
   if (t->exit_status == -1)
     process_wait (t->tid);
@@ -146,6 +129,7 @@ start_process (void *file_name_)
       thread_block ();
       intr_enable ();
     }
+      
   palloc_free_page (file_name);
 
   // printf("%d",if_.esp);
@@ -173,42 +157,15 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  // printf("Enter process_wait.\n");
-  // struct thread *child_thread = get_child_thread (child_tid);
-  // printf("get child\n");
-  // if (child_thread == NULL || child_thread->status == THREAD_DYING)
-  //   {
-  //     printf("No child process wait\n");
-  //     return -1;
-  //   }
-    // printf("%d", child_thread->tid);
-
-  // printf ("%s: exit in process_wait (%d)\n", child_thread->name,
-  //         child_thread->exit_status);
-  // return child_thread->exit_status;
-  // printf("exit!\n");
-  // return -1;
-  // struct thread *t;
-  // int ret;
-  
-  // ret = -1;
-  // printf("%d\n",child_tid);
-  // t = get_thread_by_tid (child_tid);
-  // printf("get child\n");
-  // if (t ==NULL)
-  // printf("NULL chids");
-  // // ASSERT (is_thread (t));
-  // // sema_down (&t->wait);
-  // printf("%d", t->tid);
-  // return -1;
-    struct thread *t;
+  struct thread *t;
   int ret;
-  
+
   ret = -1;
   t = get_thread_by_tid (child_tid);
-  if ( t->status == THREAD_DYING || t->exit_status == RET_STATUS_INVALID)
+  if (t->status == THREAD_DYING || t->exit_status == RET_STATUS_INVALID)
     goto done;
-  if (t->exit_status != RET_STATUS_DEFAULT && t->exit_status != RET_STATUS_INVALID)
+  if (t->exit_status != RET_STATUS_DEFAULT
+      && t->exit_status != RET_STATUS_INVALID)
     {
       ret = t->exit_status;
       goto done;
@@ -219,7 +176,7 @@ process_wait (tid_t child_tid UNUSED)
   printf ("%s: exit(%d)\n", t->name, t->exit_status);
   while (t->status == THREAD_BLOCKED)
     thread_unblock (t);
-  
+
 done:
   t->exit_status = RET_STATUS_INVALID;
   return ret;
@@ -228,14 +185,19 @@ done:
 /* Free the current process's resources. */
 void
 process_exit (void)
-{
+{  
+  // printf("process exit\n");
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
   while (!list_empty (&cur->wait.waiters))
     sema_up (&cur->wait);
   // printf ("Process exit and sema_up(child thread)\n");
-  if (cur->exec_file){file_allow_write(cur->exec_file);}
+  if (cur->exec_file)
+    {
+      file_close (cur->exec_file);
+      cur->exec_file = NULL;
+    }
   if (cur->parent)
     {
       intr_disable ();
@@ -368,6 +330,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (file_name);
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);

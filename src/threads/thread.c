@@ -183,8 +183,6 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  // printf ("thread create.\n");
-
 #ifdef USERPROG
   sema_init (&t->wait, 0);
   t->exit_status = RET_STATUS_DEFAULT;
@@ -193,7 +191,6 @@ thread_create (const char *name, int priority,
   if (thread_current () != initial_thread)
     list_push_back (&thread_current ()->children_list, &t->children_elem);
   t->parent = thread_current ();
-  // t->exited = false;
 #endif
 
   /* Stack frame for kernel_thread(). */

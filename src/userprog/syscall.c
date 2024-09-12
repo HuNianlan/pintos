@@ -209,7 +209,6 @@ open (const char *file)
   {
     exit(-1);
   }
-  // printf("file name: %s\n", file);
 
   struct file *f = filesys_open (file);
 
@@ -221,7 +220,6 @@ open (const char *file)
   struct file_descripter *fd = malloc (sizeof (struct file_descripter));
   if (fd == NULL)
     {
-      // printf("malloc failed\n");
       file_close (f);
       lock_release (&file_lock);
       return -1; // open fail
@@ -230,7 +228,7 @@ open (const char *file)
   fd->fd = allocate_fd ();
   fd->file = f;
   fd->owner = thread_current ()->tid;
-
+  // msg("Open file, fd:%i\n",fd->fd);
   list_push_back (&cur->fd_list, &fd->thread_elem);
   list_push_back (&open_file_list, &fd->elem);
 
@@ -246,6 +244,7 @@ close (int fd)
   if (fd_found == NULL || fd_found->owner != thread_current ()->tid)
     exit (-1);
 
+  // msg("Close file, fd:%i\n",fd);
   lock_acquire (&file_lock);
   list_remove (&fd_found->thread_elem);
   list_remove (&fd_found->elem);
