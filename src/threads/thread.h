@@ -107,6 +107,7 @@ struct thread
     struct list_elem children_elem; 
     struct thread *parent; 
     struct list fd_list;
+    struct file* exec_file;
 #endif
 
     /* Owned by thread.c. */

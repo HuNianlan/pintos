@@ -16,6 +16,4 @@ struct file_descripter
     struct list_elem thread_elem;
 };
 
-struct list open_file_list;
-int allocate_fd (void);
 #endif /* userprog/syscall.h */

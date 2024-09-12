@@ -8,6 +8,9 @@
         "filesys.h": "c",
         "*.inc": "c",
         "lib.h": "c",
-        "main.h": "c"
+        "main.h": "c",
+        "process.h": "c",
+        "pagedir.h": "c",
+        "syscall.h": "c"
     }
 }

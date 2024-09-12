@@ -139,6 +139,12 @@ exit (int status)
   // struct list_elem *l = list_begin (&t->fd_list);
   t->exit_status = status;
   // printf ("%s: exit(%d)\n", t->name, status);
+    struct list_elem *l;
+    while (!list_empty (&t->fd_list))
+    {
+      l = list_begin (&t->fd_list);
+      close (list_entry (l, struct file_descripter, thread_elem)->fd);
+    }
 
   thread_exit ();
 }

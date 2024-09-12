@@ -115,6 +115,12 @@ start_process (void *file_name_)
 
   success = load (file_name, &if_.eip, &if_.esp);
 
+  struct file *file = filesys_open (file_name);
+  if (file == NULL)
+  {
+    success = false;
+  }
+  
   struct thread *t = thread_current ();
   /* If load failed, quit. */
   if (!success)
@@ -132,8 +138,8 @@ start_process (void *file_name_)
     {
       push_arguments (&if_.esp, argc, argv, cmdlength + argc);
 
-      struct file *file = filesys_open (file_name);
       file_deny_write (file);
+      t->exec_file = file;
 
       sema_up (&t->wait);
       intr_disable ();
@@ -229,6 +235,7 @@ process_exit (void)
   while (!list_empty (&cur->wait.waiters))
     sema_up (&cur->wait);
   // printf ("Process exit and sema_up(child thread)\n");
+  if (cur->exec_file){file_allow_write(cur->exec_file);}
   if (cur->parent)
     {
       intr_disable ();
