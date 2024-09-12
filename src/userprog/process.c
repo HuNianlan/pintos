@@ -193,17 +193,7 @@ process_exit (void)
   while (!list_empty (&cur->wait.waiters))
     sema_up (&cur->wait);
   // printf ("Process exit and sema_up(child thread)\n");
-  if (cur->exec_file)
-    {
-      file_close (cur->exec_file);
-      cur->exec_file = NULL;
-    }
-  if (cur->parent)
-    {
-      intr_disable ();
-      thread_block ();
-      intr_enable ();
-    }
+  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -220,6 +210,18 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+    }
+    
+    if (cur->exec_file)
+    {
+      file_close (cur->exec_file);
+      cur->exec_file = NULL;
+    }
+  if (cur->parent)
+    {
+      intr_disable ();
+      thread_block ();
+      intr_enable ();
     }
 }
 

@@ -209,14 +209,15 @@ open (const char *file)
   {
     exit(-1);
   }
+  lock_acquire (&file_lock);
 
   struct file *f = filesys_open (file);
-
   if (f == NULL)
     {
+      lock_release(&file_lock);
       return -1;
     }
-  lock_acquire (&file_lock);
+
   struct file_descripter *fd = malloc (sizeof (struct file_descripter));
   if (fd == NULL)
     {
