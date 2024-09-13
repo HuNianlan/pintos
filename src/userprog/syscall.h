@@ -5,14 +5,12 @@
 #include "threads/thread.h"
 
 void syscall_init (void);
-void exit (int status);
+void exit (int status); // used in exception, page_fault()
 
 struct file_descripter
 {
     int fd;
-    tid_t owner; // used in file close
     struct file *file;
-    struct list_elem elem;
     struct list_elem thread_elem;
 };
 

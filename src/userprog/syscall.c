@@ -18,7 +18,6 @@
 typedef int pid_t;
 
 /* Store all the current opened file*/
-static struct list open_file_list;
 struct lock file_lock;
 
 static void syscall_handler (struct intr_frame *);
@@ -46,7 +45,6 @@ void
 syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  list_init (&open_file_list);
   lock_init (&file_lock);
 }
 
@@ -285,10 +283,8 @@ open (const char *file)
   struct thread *cur = thread_current ();
   fd->fd = allocate_fd ();
   fd->file = f;
-  fd->owner = thread_current ()->tid;
 
-  list_push_back (&cur->fd_list, &fd->thread_elem);
-  list_push_back (&open_file_list, &fd->elem);
+  list_push_back (&cur->fd_list, &fd->thread_elem);s
 
   lock_release (&file_lock);
   return fd->fd;
@@ -302,14 +298,13 @@ close (int fd)
 {
   struct file_descripter *fd_found = find_file_descripter (fd);
 
-  if (fd_found == NULL || fd_found->owner != thread_current ()->tid)
+  if (fd_found == NULL)
     {
       exit (-1);
     }
 
   lock_acquire (&file_lock);
   list_remove (&fd_found->thread_elem);
-  list_remove (&fd_found->elem);
   file_close (fd_found->file);
   lock_release (&file_lock);
   free (fd_found);
@@ -582,7 +577,7 @@ allocate_fd ()
   return ++fd;
 }
 
-/* Find the corresponding file_descripter to the file descripter id*/
+/* Find the current thread 's corresponding file_descripter to the file descripter id*/
 static struct file_descripter *
 find_file_descripter (int fd)
 {
@@ -596,7 +591,7 @@ find_file_descripter (int fd)
   return NULL;
 }
 
-/* Find the corresponding file to the file descripter id*/
+/* Find the current thread 's corresponding file to the file descripter id*/
 static struct file *
 find_file (int fd)
 {
