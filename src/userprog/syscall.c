@@ -284,7 +284,7 @@ open (const char *file)
   fd->fd = allocate_fd ();
   fd->file = f;
 
-  list_push_back (&cur->fd_list, &fd->thread_elem);s
+  list_push_back (&cur->fd_list, &fd->thread_elem);
 
   lock_release (&file_lock);
   return fd->fd;
