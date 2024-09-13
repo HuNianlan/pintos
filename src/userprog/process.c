@@ -132,8 +132,6 @@ start_process (void *file_name_)
       
   palloc_free_page (file_name);
 
-  // printf("%d",if_.esp);
-  // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp,true);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -191,9 +189,7 @@ process_exit (void)
   uint32_t *pd;
 
   while (!list_empty (&cur->wait.waiters))
-    sema_up (&cur->wait);
-  // printf ("Process exit and sema_up(child thread)\n");
-  
+    sema_up (&cur->wait);  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -212,17 +208,17 @@ process_exit (void)
       pagedir_destroy (pd);
     }
     
-    if (cur->exec_file)
-    {
-      file_close (cur->exec_file);
-      cur->exec_file = NULL;
-    }
+  if (cur->exec_file)
+  {
+    file_close (cur->exec_file);
+    cur->exec_file = NULL;
+  }
   if (cur->parent)
-    {
-      intr_disable ();
-      thread_block ();
-      intr_enable ();
-    }
+  {
+    intr_disable ();
+    thread_block ();
+    intr_enable ();
+  }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -611,18 +607,15 @@ void push_arguments(void ** esp, int argc , char * argv[], int cmdlength){
 struct thread *
 get_child_thread (tid_t child_tid)
 {
-  // printf ("Getting child thread\n");
   struct thread *child_thread = NULL;
   struct list_elem *temp = NULL;
 
   /* Look to see if the child thread in question is our child. */
   if (list_empty (&thread_current ()->children_list))
     {
-      // printf ("empty child list");
       return NULL;
     }
-  // printf ("not list empty\n");
-  // printf("child_id %i\n",child_tid);
+
   for (temp = list_front (&thread_current ()->children_list); temp != NULL;
        temp = temp->next)
     {
