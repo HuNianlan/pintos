@@ -50,21 +50,21 @@ process_execute (const char *file_name)
   thread_name = strtok_r (thread_name, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy);
-  free (thread_name);
 
   struct thread *t = get_thread_by_tid (tid);
   sema_down (&t->wait);
   if (t->exit_status == -1)
-    tid = TID_ERROR;
+    {
+      tid = TID_ERROR;
+      process_wait (t->tid);
+    }
+
   if (t->status == THREAD_BLOCKED)
     thread_unblock (t);
-  if (t->exit_status == -1)
-    process_wait (t->tid);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+  free (thread_name);
   return tid;
 }
 
@@ -213,12 +213,12 @@ process_exit (void)
       file_close (cur->exec_file);
       cur->exec_file = NULL;
     }
-  if (cur->parent)
-    {
+  // if (cur->parent)
+  //   {
       intr_disable ();
       thread_block ();
       intr_enable ();
-    }
+    // }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -583,7 +583,7 @@ push_arguments (void **esp, int argc, char *argv[], int cmdlength)
       *esp -= (strlen (argv[i]) + 1);
       strlcpy (*esp, argv[i], strlen (argv[i]) + 1);
       agrument_address -= 1;
-      *agrument_address = *esp;
+      *agrument_address = (uint32_t)*esp;
     }
 
   /*padding*/
@@ -595,7 +595,7 @@ push_arguments (void **esp, int argc, char *argv[], int cmdlength)
 
   *esp -= (argc + 2) * 4;
   /*argv and argc*/
-  *(uint32_t *)*esp = *esp + 4;
+  *(uint32_t *)*esp = (uint32_t)*esp + 4;
 
   *esp -= 4;
   *(uint32_t *)*esp = argc;
@@ -605,30 +605,30 @@ push_arguments (void **esp, int argc, char *argv[], int cmdlength)
   *(uint32_t *)*esp = 0;
 }
 
-struct thread *
-get_child_thread (tid_t child_tid)
-{
-  struct thread *child_thread = NULL;
-  struct list_elem *temp = NULL;
+// struct thread *
+// get_child_thread (tid_t child_tid)
+// {
+//   struct thread *child_thread = NULL;
+//   struct list_elem *temp = NULL;
 
-  /* Look to see if the child thread in question is our child. */
-  if (list_empty (&thread_current ()->children_list))
-    {
-      // printf ("empty child list");
-      return NULL;
-    }
-  // printf ("not list empty\n");
-  // printf("child_id %i\n",child_tid);
-  for (temp = list_front (&thread_current ()->children_list); temp != NULL;
-       temp = temp->next)
-    {
-      child_thread = list_entry (temp, struct thread, children_elem);
-      printf ("finding, this child id is %i\n", child_thread->tid);
-      if (child_thread->tid == child_tid)
-        {
-          printf ("child found\n");
-          return child_thread;
-        }
-    }
-  return NULL;
-}
+//   /* Look to see if the child thread in question is our child. */
+//   if (list_empty (&thread_current ()->children_list))
+//     {
+//       // printf ("empty child list");
+//       return NULL;
+//     }
+//   // printf ("not list empty\n");
+//   // printf("child_id %i\n",child_tid);
+//   for (temp = list_front (&thread_current ()->children_list); temp != NULL;
+//        temp = temp->next)
+//     {
+//       child_thread = list_entry (temp, struct thread, children_elem);
+//       printf ("finding, this child id is %i\n", child_thread->tid);
+//       if (child_thread->tid == child_tid)
+//         {
+//           printf ("child found\n");
+//           return child_thread;
+//         }
+//     }
+//   return NULL;
+// }
