@@ -110,6 +110,7 @@ start_process (void *file_name_)
   if (!success)
     {
       t->exit_status = -1;
+      process_exit(); // first exit, then go to wait
       sema_up (&t->wait);
       intr_disable ();
       thread_block ();
@@ -172,7 +173,7 @@ process_wait (tid_t child_tid UNUSED)
 
   sema_down (&t->wait);
   ret = t->exit_status;
-  printf ("%s: exit(%d)\n", t->name, t->exit_status);
+
   while (t->status == THREAD_BLOCKED)
     thread_unblock (t);
 
@@ -187,6 +188,8 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
   while (!list_empty (&cur->wait.waiters))
     sema_up (&cur->wait);
@@ -213,6 +216,7 @@ process_exit (void)
       file_close (cur->exec_file);
       cur->exec_file = NULL;
     }
+
   // if (cur->parent)
   //   {
       intr_disable ();
