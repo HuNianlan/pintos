@@ -600,12 +600,10 @@ get_thread_by_tid (tid_t tid)
   struct list_elem *f;
   struct thread *ret;
   
-  ret = NULL;
   for (f = list_begin (&all_list); f != list_end (&all_list); f = list_next (f))
     {
       ret = list_entry (f, struct thread, allelem);
-      ASSERT (is_thread (ret));
-      // printf("thread id: %i\n",ret->tid);
+
       if (ret->tid == tid)
         return ret;
     }
