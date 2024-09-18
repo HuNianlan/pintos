@@ -91,6 +91,9 @@ start_process (void *file_name_)
       argc++;
     }
 
+
+  /* Initialize the set of vm_entries.e.g. hash tabble */
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -195,6 +198,7 @@ process_exit (void)
     sema_up (&cur->wait);
   // printf ("Process exit and sema_up(child thread)\n");
   
+  /*add vm_entry delete function*/
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -550,6 +554,9 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+    /*create vm_entry*/
+    /*Setup vm_members*/
+    /*using insert_vme,add vm_entry to hash table*/
   return success;
 }
 

@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include "threads/synch.h"
 
+/*use hash table structure for vm*/
+#include "lib/kernel/hash.h"
+#include <hash.h>
+
 # define RET_STATUS_DEFAULT 0xcdcdcdcd
 # define RET_STATUS_INVALID 0xdcdcdcdc
 
@@ -112,6 +116,8 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    struct hash vm;
   };
 
 /* If false (default), use round-robin scheduler.
