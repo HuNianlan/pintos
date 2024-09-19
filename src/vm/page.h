@@ -12,6 +12,10 @@ struct vm_entry{
     uint32_t read_bytes;
     off_t offset;
     struct file* file;
+    bool writable;
+
+
+    struct hash_elem elem;
 
 };
 
@@ -20,4 +24,6 @@ void vm_destroy(struct hash* vm);
 struct vm_entry* find_vme(void* vaddr);
 bool insert_vme(struct hash* vm,struct vm_entry* vme);
 bool delete_vme(struct hash* vm,struct vm_entry* vme);
+bool load_file(void* kaddr,struct vm_entry *vme);
+
 #endif /* vm/page.h */

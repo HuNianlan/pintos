@@ -20,6 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "vm/page.h"
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void push_arguments (void **esp, int argc, char *argv[], int cmdlength);
@@ -91,8 +93,11 @@ start_process (void *file_name_)
       argc++;
     }
 
+  struct thread *t = thread_current ();
 
   /* Initialize the set of vm_entries.e.g. hash tabble */
+  t->vm = (struct hash*)malloc(sizeof(struct hash));
+  vm_init(t->vm);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -108,7 +113,6 @@ start_process (void *file_name_)
       success = false;
     }
 
-  struct thread *t = thread_current ();
   /* If load failed, quit. */
   if (!success)
     {
@@ -199,6 +203,7 @@ process_exit (void)
   // printf ("Process exit and sema_up(child thread)\n");
   
   /*add vm_entry delete function*/
+  vm_destroy(cur->vm);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -509,30 +514,55 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
+      /*Create vm_entry*/
+      struct vm_entry* vme = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+      if(vme == NULL){
+        free(vme);
         return false;
+      }
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int)page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false;
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      /*Setting vm_entry members, offset and size of file to read when virtual page is required, zero byte to pad at the end ...*/
+      vme->VM_BIN = true;
+      vme->vaddr = upage;
+      vme->read_bytes = page_read_bytes;
+      vme->zero_bytes = page_zero_bytes;
+      vme->offset = ofs;
+      vme->file = file;
+      vme->writable = writable;
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable))
-        {
-          palloc_free_page (kpage);
-          return false;
-        }
+      /*Add vm_entry to hash table by insert_vme*/
+      bool result = insert_vme(thread_current()->vm,vme);
+      if(result == false){
+        free(vme);
+        return false;
+      }
+
+      // /* Get a page of memory. */
+      // uint8_t *kpage = palloc_get_page (PAL_USER);
+      // if (kpage == NULL)
+      //   return false;
+
+      // /* Load this page. */
+      // if (file_read (file, kpage, page_read_bytes) != (int)page_read_bytes)
+      //   {
+      //     palloc_free_page (kpage);
+      //     return false;
+      //   }
+      // memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+      // /* Add the page to the process's address space. */
+      // if (!install_page (upage, kpage, writable))
+      //   {
+      //     palloc_free_page (kpage);
+      //     return false;
+      //   }
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      
+      ofs += page_read_bytes;
     }
   return true;
 }
@@ -554,9 +584,33 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-    /*create vm_entry*/
-    /*Setup vm_members*/
-    /*using insert_vme,add vm_entry to hash table*/
+
+  
+  struct vm_entry *vme = (struct vm_entry *) malloc(sizeof(struct vm_entry));
+      
+  if (vme == NULL)
+  {
+    free(vme);
+    return false;
+  }
+  // Initialize the vm_entry members
+  vme->VM_BIN = false;          // Indicates this is a stack page, not a file-backed page
+  vme->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  vme->read_bytes = 0;          // No file to read from
+  vme->zero_bytes = PGSIZE;     // All bytes are zeroed
+  vme->offset = 0;              // No file offset
+  vme->file = NULL;             // No backing file
+  vme->writable = true;         // The stack should be writable
+
+  // Insert vm_entry into the process's vm hash table
+  if (!insert_vme(thread_current()->vm, vme))
+  {
+    free(vme);
+    return false;
+  }
+    
+
+
   return success;
 }
 
@@ -618,30 +672,28 @@ push_arguments (void **esp, int argc, char *argv[], int cmdlength)
   *(uint32_t *)*esp = 0;
 }
 
-// struct thread *
-// get_child_thread (tid_t child_tid)
-// {
-//   struct thread *child_thread = NULL;
-//   struct list_elem *temp = NULL;
 
-//   /* Look to see if the child thread in question is our child. */
-//   if (list_empty (&thread_current ()->children_list))
-//     {
-//       // printf ("empty child list");
-//       return NULL;
-//     }
-//   // printf ("not list empty\n");
-//   // printf("child_id %i\n",child_tid);
-//   for (temp = list_front (&thread_current ()->children_list); temp != NULL;
-//        temp = temp->next)
-//     {
-//       child_thread = list_entry (temp, struct thread, children_elem);
-//       printf ("finding, this child id is %i\n", child_thread->tid);
-//       if (child_thread->tid == child_tid)
-//         {
-//           printf ("child found\n");
-//           return child_thread;
-//         }
-//     }
-//   return NULL;
-// }
+
+bool 
+handle_mm_fault(struct vm_entry* vme){
+  /* Get a page of memory. */
+  uint8_t *kpage = palloc_get_page (PAL_USER);
+  if (kpage == NULL)
+    return false;
+  /*check the vme type*/
+  if(vme->VM_BIN == false)
+    return false;
+
+  /* Load file from disk to memory. */
+  if(load_file(kpage,vme) == false){
+    return false;
+  }
+
+  /* update associated page table entry after loading into physical memory. */
+  if (!install_page (vme->vaddr, kpage, vme->writable))
+    {
+      palloc_free_page (kpage);
+      return false;
+    }
+  return true;
+}

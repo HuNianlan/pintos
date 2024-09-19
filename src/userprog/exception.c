@@ -6,6 +6,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
+#include "vm/page.h"
+#include "userprog/process.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -150,18 +152,22 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   /* For bad_ tests*/
-  if (not_present || (is_kernel_vaddr (fault_addr) && user))
+   /* For bad_tests*/
+  if (!not_present || is_kernel_vaddr (fault_addr)||fault_addr == NULL)
     exit (-1);
 
+   struct vm_entry* vme = find_vme(pg_round_down(fault_addr));
+   bool result = handle_mm_fault(vme);
+   if(result == false)
+      exit(-1);
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+//   printf ("Page fault at %p: %s error %s page in %s context.\n",
+//           fault_addr,
+//           not_present ? "not present" : "rights violation",
+//           write ? "writing" : "reading",
+//           user ? "user" : "kernel");
+//   kill (f);
 }
 

@@ -12,6 +12,15 @@
         "process.h": "c",
         "pagedir.h": "c",
         "syscall.h": "c",
-        "off_t.h": "c"
+        "off_t.h": "c",
+        "*.tcc": "c",
+        "string": "c",
+        "unordered_map": "c",
+        "vector": "c",
+        "functional": "c",
+        "memory": "c",
+        "string_view": "c",
+        "system_error": "c",
+        "debug.h": "c"
     }
 }
