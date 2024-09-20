@@ -80,10 +80,11 @@ static void vm_destroy_func(struct hash_elem* e, void *aux UNUSED) {
 
 bool 
 load_file(void* kaddr,struct vm_entry *vme){
-    /*file_read_at*/
-    if( file_read_at(vme->file,kaddr,vme->read_bytes,vme->offset)!= (int)vme->read_bytes)
+
+    size_t page_read_bytes = vme->read_bytes < PGSIZE ? vme->read_bytes : PGSIZE;
+    /*use file_read_at*/
+    if( file_read_at(vme->file,kaddr,vme->read_bytes,vme->offset)!= (int)page_read_bytes)
     {
-        // printf("111\n");
         palloc_free_page (kaddr);
         return false;
     }
