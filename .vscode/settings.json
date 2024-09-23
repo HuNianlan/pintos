@@ -13,7 +13,9 @@
         "pagedir.h": "c",
         "syscall.h": "c",
         "stdint.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "free-map.h": "c",
+        "block.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

@@ -49,6 +49,10 @@ void
 cache_init (void)
 {
   lock_init (&cache_lock);
+  for (unsigned i = 0; i < BLOCK_SECTOR_NUM; i++)
+    {
+      memset (&cache[i], 0, sizeof (struct cache_line));
+    }
   thread_create ("periodic_cache_write", PRI_DEFAULT, periodic_cache_write,
                  NULL);
 }
@@ -114,7 +118,7 @@ cache_evict (void)
  * 2. copy appropriate amount of cache into a buffer
  */
 void
-cache_read (block_sector_t pos, const void *buffer, off_t size, off_t ofs)
+cache_read (block_sector_t pos, void *buffer, off_t size, off_t ofs)
 {
   lock_acquire (&cache_lock);
   struct cache_line *sector = cache_lookup (pos);
@@ -146,7 +150,7 @@ cache_read (block_sector_t pos, const void *buffer, off_t size, off_t ofs)
  * specified by 'sector', from `source` (user memory address).
  */
 void
-cache_write (block_sector_t pos, const void *buffer, off_t size, off_t ofs)
+cache_write (block_sector_t pos, void *buffer, off_t size, off_t ofs)
 {
   lock_acquire (&cache_lock);
   struct cache_line *sector = cache_lookup (pos);
@@ -189,9 +193,9 @@ cache_backto_disk (void)
   lock_acquire (&cache_lock);
   for (unsigned i = 0; i < BLOCK_SECTOR_NUM; i++)
     {
-      cache[i].dirty = false;
       if (cache[i].dirty)
         block_write (fs_device, cache[i].block_sector, cache[i].data);
+        cache[i].dirty = false;
     }
   lock_release (&cache_lock);
 }
