@@ -2,6 +2,9 @@
 #define FILESYS_CACHE_H
 
 #include "devices/block.h"
+#include <stdbool.h>
+#include "threads/synch.h"
+#include "filesys/off_t.h"
 
 void cache_init (void);
 void cache_close (void);

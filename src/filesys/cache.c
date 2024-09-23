@@ -63,7 +63,7 @@ cache_lookup (block_sector_t sector)
 
   for (unsigned i = 0; i < BLOCK_SECTOR_NUM; i++)
     {
-      if (cache[i].occupied && cache[i].disk_sector == sector)
+      if (cache[i].occupied && cache[i].block_sector == sector)
         {
           // cache hit.
           return &(cache[i]);
@@ -139,7 +139,7 @@ cache_read (block_sector_t pos, const void *buffer, off_t size, off_t ofs)
   memcpy (buffer, sector->data + ofs, size); // read data
   sector->last_access = get_timestamp();
   lock_release(&cache_lock);
-}b
+}
 
 /**
  * Writes SECTOR_SIZE bytes of data into the disk sector
@@ -189,9 +189,9 @@ cache_backto_disk (void)
   lock_acquire (&cache_lock);
   for (unsigned i = 0; i < BLOCK_SECTOR_NUM; i++)
     {
-      cache_arr[i].dirty = false;
-      if (cache_arr[i].dirty)
-        block_write (fs_device, cache_arr[i].block_sector, cache_arr[i].data);
+      cache[i].dirty = false;
+      if (cache[i].dirty)
+        block_write (fs_device, cache[i].block_sector, cache[i].data);
     }
   lock_release (&cache_lock);
 }
