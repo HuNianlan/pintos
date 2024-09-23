@@ -9,12 +9,14 @@
 #include "vm/page.h"
 #include "userprog/process.h"
 
+#define ULIMIT 0x800000
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
-
+static bool do_grow(void *fault_addr,struct intr_frame *f);
 /* Registers handlers for interrupts that can be caused by user
    programs.
 
@@ -159,9 +161,15 @@ page_fault (struct intr_frame *f)
   }
 
    struct vm_entry* vme = find_vme(pg_round_down(fault_addr));
+   
    bool result = handle_mm_fault(vme);
-   if(result == false){
-      // printf("sb\n");
+   
+   if(vme == NULL && do_grow(fault_addr,f)){
+      /*grow stack*/
+      result = grow_stack(fault_addr);
+   }
+
+   if(result== false){
       exit(-1);
    }
   /* To implement virtual memory, delete the rest of the function
@@ -175,3 +183,10 @@ page_fault (struct intr_frame *f)
 //   kill (f);
 }
 
+static bool do_grow(void *fault_addr,struct intr_frame *f){
+   if(fault_addr>=PHYS_BASE || fault_addr < PHYS_BASE - ULIMIT)
+      return false;
+   if(fault_addr < (f->esp - 32))
+      return false;
+   return true;
+}

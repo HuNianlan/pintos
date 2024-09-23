@@ -21,6 +21,8 @@
         "memory": "c",
         "string_view": "c",
         "system_error": "c",
-        "debug.h": "c"
+        "debug.h": "c",
+        "swap.h": "c",
+        "string.h": "c"
     }
 }

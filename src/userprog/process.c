@@ -24,10 +24,11 @@
 #include "vm/frame.h"
 #include "vm/swap.h"
 
+
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void push_arguments (void **esp, int argc, char *argv[], int cmdlength);
-struct thread *get_child_thread (tid_t child_tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -681,14 +682,17 @@ push_arguments (void **esp, int argc, char *argv[], int cmdlength)
 
 bool 
 handle_mm_fault(struct vm_entry* vme){
+  if(vme == NULL)
+    return false;
   bool success = false;
-
   /* Get a page of memory. */
   // uint8_t *kpage = palloc_get_page (PAL_USER);
   uint8_t *kpage = frame_alloc(vme,PAL_USER);
   
-  if (kpage == NULL)
+  if (kpage == NULL){
+    frame_free (kpage);
     return false;
+    }
   
   /*check the vme type*/
   switch (vme->type)
@@ -702,6 +706,7 @@ handle_mm_fault(struct vm_entry* vme){
     if(vme->swap_index != -1){
       swap_in(vme->swap_index,kpage);
       vme->swap_index = -1;
+      success = true;
     }
     break;
   
@@ -709,12 +714,13 @@ handle_mm_fault(struct vm_entry* vme){
     success = false;
     break;
   }
-  // if(vme->type != VM_BIN){
-  //   if(vme->type == VM_ANON)
-  //     return false;/*swap_in*/
-  //   else
-  //     return false;
+
+  /*determine whether to grow stack*/
+  // if(success == false && grow){
+  //   success = grow_stack(vme->vaddr);
   // }
+
+
 
   if(success == false){
     frame_free (kpage);
@@ -729,4 +735,54 @@ handle_mm_fault(struct vm_entry* vme){
     }
   
   return success;
+}
+
+
+bool grow_stack (void* fault_addr)
+{
+  bool success = false;
+  void *upage = pg_round_down(fault_addr);
+  struct vm_entry *vme = (struct vm_entry *)malloc(sizeof(struct vm_entry));
+  if (vme == NULL){
+    free(vme);
+    return false;
+  }
+  vme->type = VM_ANON;  // This is a stack page, not a file-backed page
+  vme->vaddr = upage;
+  vme->read_bytes = PGSIZE;
+  vme->zero_bytes = 0;
+  vme->offset = 0;
+  vme->file = NULL;
+  vme->writable = true;
+  vme->swap_index = -1;
+  
+  // Insert vm_entry into the process's vm hash table
+  if (!insert_vme(thread_current()->vm, vme))
+  {
+    free(vme);
+    return false;
+  }
+
+  uint8_t *kpage = frame_alloc(vme,PAL_USER|PAL_ZERO);
+  
+  if (kpage == NULL){
+    frame_free (kpage);
+    return false;
+  }
+
+  // /* update associated page table entry after loading into physical memory. */
+  // if (!install_page (vme->vaddr, kpage, vme->writable))
+  //   {
+  //     frame_free (kpage);
+  //     return false;
+  //   }
+  
+  // return true;
+      /* Add the page to the process's address space. */
+  if (!pagedir_set_page (thread_current()->pagedir, upage, kpage, true))
+	{
+	  frame_free (kpage);
+    return false;
+	}
+  return true;
 }
