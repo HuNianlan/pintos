@@ -92,3 +92,10 @@ load_file(void* kaddr,struct vm_entry *vme){
     memset (kaddr + page_read_bytes, 0, vme->zero_bytes);
     return true;
 }
+
+void file_write_back(struct vm_entry* vme){
+    file_seek (vme->file, vme->offset);
+    file_write (vme->file, 
+                  vme->vaddr,
+                  vme->read_bytes);
+}

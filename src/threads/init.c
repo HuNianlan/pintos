@@ -39,6 +39,10 @@
 #include "filesys/fsutil.h"
 #endif
 
+#ifdef VM
+#include "vm/swap.h"
+#endif
+
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
 
@@ -117,10 +121,13 @@ main (void)
   frame_init();
 #endif
 
+
+
   /* Start thread scheduler and enable interrupts. */
   thread_start ();
   serial_init_queue ();
   timer_calibrate ();
+
 
 #ifdef FILESYS
   /* Initialize file system. */
@@ -129,6 +136,10 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
+#ifdef VM
+  locate_block_devices ();
+  swap_init ();
+#endif
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */

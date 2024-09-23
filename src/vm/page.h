@@ -23,6 +23,7 @@ struct vm_entry{
     struct file* file;
     bool writable;
 
+   size_t swap_index;/*when it is not on swap, set it to -1*/
 
     struct hash_elem elem;
 
@@ -34,5 +35,5 @@ struct vm_entry* find_vme(void* vaddr);
 bool insert_vme(struct hash* vm,struct vm_entry* vme);
 bool delete_vme(struct hash* vm,struct vm_entry* vme);
 bool load_file(void* kaddr,struct vm_entry *vme);
-
+void file_write_back(struct vm_entry* vme);
 #endif /* vm/page.h */

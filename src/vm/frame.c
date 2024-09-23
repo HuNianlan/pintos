@@ -5,13 +5,15 @@
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
+#include "vm/swap.h"
+#include "userprog/pagedir.h"
 
 static struct list frame_table;
 static struct lock frame_table_lock;
 /* Clock hand pointer */
 static struct list_elem *clock_hand;
 
-
+static struct frame* find_victim(void);
 void frame_init (void){
     list_init(&frame_table);
     lock_init(&frame_table_lock);
@@ -20,17 +22,23 @@ void frame_init (void){
 
 /* Allocate a frame to the provided vm_entry */
 void *
-frame_alloc(struct vm_entry *vme)
-{
-    void *kpage = palloc_get_page(PAL_USER);
+frame_alloc(struct vm_entry *vme,enum palloc_flags flags)
+{   
+
+    void *kpage = palloc_get_page(flags);
     if (kpage == NULL) {
+
+        frame_evict();
+        kpage = palloc_get_page(flags);
+        ASSERT(kpage != NULL);
         /* Implement appropriate frame eviction here if needed */
-        PANIC("Out of memory: frame allocation failed and eviction not handled.");
+        // PANIC("Out of memory: frame allocation failed and eviction not handled.");
     }
 
     struct frame *f = malloc(sizeof(struct frame));
     if (f == NULL) {
         palloc_free_page(kpage);
+        free(f);
         return NULL;
     }
 
@@ -45,7 +53,7 @@ frame_alloc(struct vm_entry *vme)
     return kpage;
 }
 
-/* Free a frame */
+/* Free a frame using its kpage but not include its vm_entry*/
 void
 frame_free(void *kpage)
 {
@@ -70,18 +78,58 @@ frame_free(void *kpage)
 // void lru_remove(struct page_frame*);
 
 /* Evict a frame using the CLOCK algorithm */
-void *
+void
 frame_evict(void)
 {
     lock_acquire(&frame_table_lock);
+    struct frame* victim = find_victim();
+    struct thread* t = victim->owner;
+    struct vm_entry* vme = victim->vme;
 
+    switch (vme->type)
+    {
+    case VM_BIN:
+        if(pagedir_is_dirty (t->pagedir, vme->vaddr)){
+            vme->swap_index = swap_out(victim->kpage);
+            vme->type = VM_ANON;
+        }
+
+        break;
+    case VM_FILE:
+        if(pagedir_is_dirty (t->pagedir, vme->vaddr)){
+            file_write_back(vme);
+        }
+        break;
+    case VM_ANON:
+        vme->swap_index = swap_out(victim->kpage);
+    
+    default:
+        break;
+    }
+    
+    
+    /* Update the page directory and free resources */
+    pagedir_clear_page(t->pagedir, vme->vaddr);
+    
+    palloc_free_page(victim->kpage);
+    free(victim);
+
+    /* Return the evicted frame's page */
+    lock_release(&frame_table_lock);
+}
+
+
+/*find the victim page and remove its elem from frame_table*/
+static struct frame* find_victim(void){
+    /*f is the victim page*/
+    struct frame *f = NULL;
     /* Ensure the clock hand is initialized */
     if (clock_hand == NULL || clock_hand == list_end(&frame_table)) {
         clock_hand = list_begin(&frame_table);
     }
 
     while (true) {
-        struct frame *f = list_entry(clock_hand, struct frame, elem);
+        f = list_entry(clock_hand, struct frame, elem);
 
         if (f->reference_bit) {
             /* If reference bit is set, clear it and advance the hand */
@@ -89,16 +137,7 @@ frame_evict(void)
         } else {
             /* If reference bit is clear, evict this frame */
             list_remove(clock_hand);
-            
-            /* Update the page directory and free resources */
-            pagedir_clear_page(f->owner->pagedir, f->vme->vaddr);
-            palloc_free_page(f->kpage);
-            free(f->vme);
-            free(f);
-
-            /* Return the evicted frame's page */
-            lock_release(&frame_table_lock);
-            return f->kpage;
+            return f;
         }
 
         /* Move the clock hand forward. */

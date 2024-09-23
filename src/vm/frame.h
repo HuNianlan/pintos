@@ -36,11 +36,11 @@ void frame_init (void);
 // bool lru_insert(struct page_frame*);
 // void lru_remove(struct page_frame*);
 
-void *frame_alloc(struct vm_entry *vme);
+void *frame_alloc(struct vm_entry *vme,enum palloc_flags flags);
 void frame_free(void *kpage);
 
 /* Evict a page using the CLOCK algorithm */
-void *frame_evict(void);
+void frame_evict(void);
 
 //swap out page
 
