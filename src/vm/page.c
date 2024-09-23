@@ -7,6 +7,7 @@
 #include "threads/malloc.h"
 #include "filesys/file.h"
 #include "threads/vaddr.h"
+#include <string.h>
 
 /*calculate where to put the vm_entry into the hash table*/
 static unsigned vm_hash_func(const struct hash_elem *e, void *aux UNUSED);
@@ -80,14 +81,14 @@ static void vm_destroy_func(struct hash_elem* e, void *aux UNUSED) {
 
 bool 
 load_file(void* kaddr,struct vm_entry *vme){
-
+/*?*/
     size_t page_read_bytes = vme->read_bytes < PGSIZE ? vme->read_bytes : PGSIZE;
+    file_seek(vme->file,vme->offset);
     /*use file_read_at*/
-    if( file_read_at(vme->file,kaddr,vme->read_bytes,vme->offset)!= (int)page_read_bytes)
+    if( file_read(vme->file,kaddr,vme->read_bytes)!= (int)page_read_bytes)
     {
-        palloc_free_page (kaddr);
         return false;
     }
-    memset (kaddr + vme->read_bytes, 0, vme->zero_bytes);
+    memset (kaddr + page_read_bytes, 0, vme->zero_bytes);
     return true;
 }

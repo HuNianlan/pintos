@@ -343,7 +343,7 @@ read (int fd, void *buffer, unsigned size)
     {
       exit (-1);
     }
-
+  // printf("lock_acquire in read\n");
   lock_acquire (&file_lock);
 
   // Case 1: Reading from the keyboard (file descriptor 0)

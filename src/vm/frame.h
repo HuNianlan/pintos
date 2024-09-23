@@ -1,22 +1,28 @@
 #ifndef VM_FRAM_H
 #define VM_FRAM_H
 
-#include "lib/kernel/hash.h"
-#include <hash.h>
+// #include "lib/kernel/hash.h"
+// #include <hash.h>
+
+// #include "threads/thread.h"
 #include "threads/synch.h"
 #include "threads/palloc.h"
 #include "vm/page.h"
+#include <stdbool.h>
+#include "lib/kernel/list.h"
 
-struct page_frame
+
+struct frame
 {
-    struct thread *t;          /* The associated thread. */
-    struct vm_entry vme;
-    void *kpage;               /* Kernel page, mapped to physical address */
+    void *kpage;                /* Kernel virtual address of the frame */
 
-    struct hash_elem helem;    /* see ::frame_map */
-    struct list_elem lelem;    /* see ::frame_list */
+    struct thread *owner;       /* The associated thread. */
+    struct vm_entry* vme;       /**/
 
-    void *upage;               /* User (Virtual Memory) Address, pointer to page */
+    struct list_elem elem;    /* see ::frame_list */
+
+    bool reference_bit;         /* Reference bit for CLOCK algorithm */
+
 
     bool pinned;               /* Used to prevent a frame from being evicted, while it is acquiring some resources.
                                     If it is true, it is never evicted. */
@@ -26,11 +32,17 @@ struct page_frame
 
 /* Functions for Frame manipulation. */
 
-void vm_frame_init (void);
-void* vm_frame_allocate (enum palloc_flags flags, void *upage);
+void frame_init (void);
+// bool lru_insert(struct page_frame*);
+// void lru_remove(struct page_frame*);
 
-void vm_frame_free (void*);
-void vm_frame_remove_entry (void*);
+void *frame_alloc(struct vm_entry *vme);
+void frame_free(void *kpage);
+
+/* Evict a page using the CLOCK algorithm */
+void *frame_evict(void);
+
+//swap out page
 
 void vm_frame_pin (void* kpage);
 void vm_frame_unpin (void* kpage);

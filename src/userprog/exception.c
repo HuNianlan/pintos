@@ -153,13 +153,17 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
    /* For bad_tests*/
-  if (!not_present || is_kernel_vaddr (fault_addr)||fault_addr == NULL)
-    exit (-1);
+  if (!not_present || is_kernel_vaddr (fault_addr)||fault_addr == NULL){
+   // printf("invalid address\n");
+   exit (-1);
+  }
 
    struct vm_entry* vme = find_vme(pg_round_down(fault_addr));
    bool result = handle_mm_fault(vme);
-   if(result == false)
+   if(result == false){
+      // printf("sb\n");
       exit(-1);
+   }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

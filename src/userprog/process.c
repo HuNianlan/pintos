@@ -522,7 +522,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       }
 
       /*Setting vm_entry members, offset and size of file to read when virtual page is required, zero byte to pad at the end ...*/
-      vme->VM_BIN = true;
+      vme->type = VM_BIN;
       vme->vaddr = upage;
       vme->read_bytes = page_read_bytes;
       vme->zero_bytes = page_zero_bytes;
@@ -594,7 +594,7 @@ setup_stack (void **esp)
     return false;
   }
   // Initialize the vm_entry members
-  vme->VM_BIN = false;          // Indicates this is a stack page, not a file-backed page
+  vme->type = VM_ANON;          // Indicates this is a stack page, not a file-backed page
   vme->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
   vme->read_bytes = 0;          // No file to read from
   vme->zero_bytes = PGSIZE;     // All bytes are zeroed
@@ -676,16 +676,18 @@ push_arguments (void **esp, int argc, char *argv[], int cmdlength)
 
 bool 
 handle_mm_fault(struct vm_entry* vme){
+
   /* Get a page of memory. */
   uint8_t *kpage = palloc_get_page (PAL_USER);
   if (kpage == NULL)
     return false;
   /*check the vme type*/
-  if(vme->VM_BIN == false)
+  if(vme->type != VM_BIN)
     return false;
 
   /* Load file from disk to memory. */
   if(load_file(kpage,vme) == false){
+    palloc_free_page (kpage);
     return false;
   }
 

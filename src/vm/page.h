@@ -5,8 +5,17 @@
 #include"filesys/off_t.h"
 #include <hash.h>
 
+/* States in a thread's life cycle. */
+enum page_type
+  {
+    VM_BIN,
+    VM_FILE,
+    VM_ANON
+  };
+
+
 struct vm_entry{
-    bool VM_BIN;
+    enum page_type type;
     void* vaddr;
     uint32_t zero_bytes;
     uint32_t read_bytes;
