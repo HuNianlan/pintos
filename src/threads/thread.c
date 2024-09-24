@@ -193,6 +193,9 @@ thread_create (const char *name, int priority,
     list_push_back (&thread_current ()->children_list, &t->children_elem);
   t->parent = thread_current ();
 #endif
+  list_init (&t->mmap_list);
+  t->next_mapid = 1;
+
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -295,6 +298,19 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+
+  /*ummap*/
+  struct thread *curr = thread_current();
+  struct list_elem *e;
+
+  for (e = list_begin(&curr->mmap_list); e != list_end(&curr->mmap_list); e = list_next(e)) {
+    struct mmap_file *mmap_file = list_entry(e, struct mmap_file, elem);
+    remove_mmap(mmap_file);
+    file_close(mmap_file->file);
+    list_remove(&mmap_file->elem);
+    free(mmap_file);
+  }
+  
 #endif
 
   /* Remove thread from all threads list, set our status to dying,

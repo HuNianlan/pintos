@@ -12,7 +12,7 @@ static struct list frame_table;
 static struct lock frame_table_lock;
 /* Clock hand pointer */
 static struct list_elem *clock_hand;
-
+static void vm_frame_set_pinned (void *kpage, bool new_value);
 static struct frame* find_victim(void);
 void frame_init (void){
     list_init(&frame_table);
@@ -45,6 +45,7 @@ frame_alloc(struct vm_entry *vme,enum palloc_flags flags)
     f->kpage = kpage;
     f->owner = thread_current();
     f->vme = vme;
+    f->pinned = false;
 
     lock_acquire(&frame_table_lock);
     list_push_back(&frame_table, &f->elem);
@@ -130,20 +131,59 @@ static struct frame* find_victim(void){
 
     while (true) {
         f = list_entry(clock_hand, struct frame, elem);
+        if(!f->pinned){
+            if (f->reference_bit) {
+                /* If reference bit is set, clear it and advance the hand */
+                f->reference_bit = false;
+            } else {
+                /* If reference bit is clear, evict this frame */
+                list_remove(clock_hand);
+                return f;
+            }
+        }
+            /* Move the clock hand forward. */
+            clock_hand = list_next(clock_hand);
+            if (clock_hand == list_end(&frame_table)) {
+                clock_hand = list_begin(&frame_table);
+            }
+    }
+}
 
-        if (f->reference_bit) {
-            /* If reference bit is set, clear it and advance the hand */
-            f->reference_bit = false;
-        } else {
-            /* If reference bit is clear, evict this frame */
-            list_remove(clock_hand);
+static struct frame* find_frame(void* kpage){
+    struct list_elem* e;
+    struct frame* f = NULL;
+    for(e = list_front(&frame_table);e!= list_tail(&frame_table);e = list_next(e)){
+        f = list_entry(e,struct frame,elem);
+        if(f->kpage == kpage){
             return f;
         }
-
-        /* Move the clock hand forward. */
-        clock_hand = list_next(clock_hand);
-        if (clock_hand == list_end(&frame_table)) {
-            clock_hand = list_begin(&frame_table);
-        }
     }
+    return NULL;
+}
+
+static void
+vm_frame_set_pinned (void *kpage, bool new_value)
+{
+  lock_acquire (&frame_table_lock);
+
+  // lookup
+  struct frame* f = find_frame(kpage);  
+//   struct hash_elem *h = hash_find (&frame_map, &(f_tmp.helem));
+  if (f == NULL) {
+    PANIC ("The frame to be pinned/unpinned does not exist");
+  }
+
+  f->pinned = new_value;
+
+  lock_release (&frame_table_lock);
+}
+
+void
+vm_frame_unpin (void* kpage) {
+  vm_frame_set_pinned (kpage, false);
+}
+
+void
+vm_frame_pin (void* kpage) {
+  vm_frame_set_pinned (kpage, true);
 }

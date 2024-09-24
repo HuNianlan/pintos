@@ -702,6 +702,8 @@ handle_mm_fault(struct vm_entry* vme){
   case VM_BIN:
     success = load_file(kpage,vme);
     break;
+  case VM_FILE:
+    success = load_file(kpage,vme);
   case VM_ANON:
     if(vme->swap_index != -1){
       swap_in(vme->swap_index,kpage);
@@ -785,4 +787,22 @@ bool grow_stack (void* fault_addr)
     return false;
 	}
   return true;
+}
+
+void remove_mmap(struct mmap_file* mmap_file){
+  struct thread* curr = thread_current();
+  while (!list_empty(&mmap_file->vm_entries)) {
+    struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
+    struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
+
+    if (pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
+        file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
+    }
+
+    frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
+    pagedir_clear_page(curr->pagedir, vme->vaddr);
+
+    delete_vme(curr->vm, vme);
+    free(vme);
+  }
 }

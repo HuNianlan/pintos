@@ -23,9 +23,10 @@ struct vm_entry{
     struct file* file;
     bool writable;
 
-   size_t swap_index;/*when it is not on swap, set it to -1*/
+    size_t swap_index;/*when it is not on swap, set it to -1*/
 
     struct hash_elem elem;
+    struct list_elem mmap_elem;
 
 };
 

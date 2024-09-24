@@ -11,6 +11,9 @@
 #include "userprog/process.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "vm/page.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
@@ -40,6 +43,8 @@ static int write (int fd, const void *buffer, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
+static mapid_t mmap (int, void *);
+static void munmap (mapid_t);
 
 void
 syscall_init (void)
@@ -102,6 +107,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         case SYS_CLOSE:
           close (*(esp + 1));
           break;
+        case SYS_MMAP:
+          f->eax = mmap(*(esp+1),(void *)*(esp+2));
+          break;
+        case SYS_MUNMAP:
+          munmap (*(esp + 1));
+          break;
+
         default:
           exit (-1);
           break;
@@ -600,3 +612,132 @@ find_file (int fd)
     return NULL;
   return fde->file;
 }
+
+
+static mapid_t mmap (int fd, void *addr){
+  if (addr == NULL || (pg_ofs (addr) != 0)||fd == 0 || fd == 1)
+    return -1;
+
+  struct thread *t = thread_current ();
+
+  struct file_descripter *fde = find_file_descripter (fd);
+  if (fde == NULL) return -1;
+  
+  
+  int32_t len = file_length (fde->file);
+  if (len <= 0) return -1;
+  
+  int ofs = 0;
+
+  while (ofs < len){
+    /*overlap with existing page*/
+    if (find_vme (addr + ofs)|| pagedir_get_page (t->pagedir, addr + ofs)) return -1;	  
+      ofs += PGSIZE;
+  }
+
+  lock_acquire (&file_lock);
+  struct file* file = file_reopen(fde->file);
+  if(file == NULL){
+    lock_release(&file_lock);
+    return -1;
+  }
+
+  struct mmap_file *mmap_file = malloc(sizeof(struct mmap_file));
+  
+    if (mmap_file == NULL) {
+        file_close(file);
+        lock_release (&file_lock);
+        return -1;
+    }
+
+    mmap_file->id = t->next_mapid++;
+    mmap_file->file = file;
+    list_init(&mmap_file->vm_entries);
+    // mmap_file->vaddr = addr;
+    list_push_back(&t->mmap_list, &mmap_file->elem);
+
+
+  for (int offset = 0; offset < len; offset += PGSIZE) {
+      size_t read_bytes = len - offset < PGSIZE ? len - offset : PGSIZE;
+      size_t zero_bytes = PGSIZE - read_bytes;
+
+      struct vm_entry *vme = malloc(sizeof(struct vm_entry));
+      if (vme == NULL) {
+          munmap(mmap_file->id);  // Roll back changes
+          lock_release (&file_lock);
+          return -1;
+      }
+      
+      vme->type = VM_FILE;
+      vme->vaddr = addr + offset;
+      vme->read_bytes = read_bytes;
+      vme->zero_bytes = zero_bytes;
+      vme->offset = offset;
+      vme->file = file;
+      vme->writable = true;
+
+      if (!insert_vme(t->vm, vme)) {
+          free(vme);
+          munmap(mmap_file->id);  // Roll back changes
+          lock_release (&file_lock);
+          return -1;
+      }
+
+      list_push_back(&mmap_file->vm_entries, &vme->mmap_elem);
+    }
+
+  lock_release (&file_lock);
+  return mmap_file->id;
+
+}
+
+static void munmap (mapid_t mapping){
+  struct thread *curr = thread_current();
+  struct list_elem *e;
+
+    for (e = list_begin(&curr->mmap_list); e != list_end(&curr->mmap_list); e = list_next(e)) {
+        struct mmap_file *mmap_file = list_entry(e, struct mmap_file, elem);
+
+        if (mmap_file->id == mapping) {
+          remove_mmap(mmap_file);
+          // while (!list_empty(&mmap_file->vm_entries)) {
+          //     struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
+          //     struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
+
+          //     if (pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
+          //         file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
+          //     }
+
+          //     frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
+          //     pagedir_clear_page(curr->pagedir, vme->vaddr);
+
+          //     delete_vme(curr->vm, vme);
+          //     free(vme);
+          // }
+
+            file_close(mmap_file->file);
+            list_remove(&mmap_file->elem);
+            free(mmap_file);
+            return;
+        }
+    }
+  }
+
+
+// static void remove_mmap(struct mmap_file* mmap_file){
+//   struct thread* curr = thread_current();
+//   while (!list_empty(&mmap_file->vm_entries)) {
+//     struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
+//     struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
+
+//     if (pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
+//         file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
+//     }
+
+//     frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
+//     pagedir_clear_page(curr->pagedir, vme->vaddr);
+
+//     delete_vme(curr->vm, vme);
+//     free(vme);
+//   }
+// }
