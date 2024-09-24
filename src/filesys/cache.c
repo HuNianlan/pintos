@@ -50,6 +50,7 @@ get_timestamp ()
 void
 cache_init (void)
 {
+  cache_shutdown = false;
   lock_init (&cache_lock);
   for (unsigned i = 0; i < BLOCK_SECTOR_NUM; i++)
     {
@@ -201,7 +202,6 @@ cache_close (void)
 void
 cache_backto_disk (void)
 {
-  lock_acquire (&cache_lock);
   for (unsigned i = 0; i < BLOCK_SECTOR_NUM; i++)
     {
       if (cache[i].dirty)
@@ -210,7 +210,6 @@ cache_backto_disk (void)
           cache[i].dirty = false;
         }
     }
-  lock_release (&cache_lock);
 }
 
 static void
