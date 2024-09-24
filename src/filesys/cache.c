@@ -27,6 +27,7 @@ struct cache_line
 
 static struct cache_line cache[BLOCK_SECTOR_NUM];
 static struct lock cache_lock;
+static bool cache_shutdown = false;
 
 /* Create another thread for periodic write:
  Because write-behind makes your file system more fragile in the face of
@@ -37,6 +38,7 @@ static unsigned get_timestamp (void);
 static struct cache_line *cache_lookup (block_sector_t sector);
 static struct cache_line *cache_find_empty (void);
 static struct cache_line *cache_evict (void);
+static void cache_backto_disk (void);
 
 unsigned
 get_timestamp ()
@@ -178,6 +180,15 @@ cache_write (block_sector_t pos, void *buffer, off_t size, off_t ofs)
   lock_release (&cache_lock);
 }
 
+void
+cache_close (void)
+{
+  lock_acquire (&cache_lock);
+  cache_shutdown = true;  // stop periodic_cache_write()
+  cache_backto_disk();
+  lock_release (&cache_lock);
+}
+
 /*
  * Writes all dirty cache blocks to disk and sets dirty false.
  *
@@ -194,8 +205,10 @@ cache_backto_disk (void)
   for (unsigned i = 0; i < BLOCK_SECTOR_NUM; i++)
     {
       if (cache[i].dirty)
-        block_write (fs_device, cache[i].block_sector, cache[i].data);
-        cache[i].dirty = false;
+        {
+          block_write (fs_device, cache[i].block_sector, cache[i].data);
+          cache[i].dirty = false;
+        }
     }
   lock_release (&cache_lock);
 }
@@ -203,11 +216,9 @@ cache_backto_disk (void)
 static void
 periodic_cache_write (void *aux UNUSED)
 {
-  while (1)
+  while (!cache_shutdown)
     {
-      timer_sleep (1024); // maybe any number not too big is avaliable
-
-      // write all dirty cache to disk
-      cache_backto_disk ();
+      timer_sleep (1024);   // maybe any number not too big is avaliable
+      cache_backto_disk (); // write all dirty cache to disk
     }
 }
