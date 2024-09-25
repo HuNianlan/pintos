@@ -709,11 +709,6 @@ handle_mm_fault(struct vm_entry* vme){
   case VM_ANON:
     if(vme->swap_index != -1){
       swap_in(vme->swap_index,kpage);
-      if (!install_page (vme->vaddr, kpage, vme->writable))
-        {
-          frame_free(kpage);
-          return false; 
-        }
       vme->swap_index = -1;
       success = true;
     }

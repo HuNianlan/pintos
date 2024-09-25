@@ -359,14 +359,15 @@ close (int fd)
 static int
 read (int fd, void *buffer, unsigned size)
 {
+  // printf("sbos\n");
+
   if (buffer == NULL || !is_valid_buffer (buffer, size))
     {
       exit (-1);
     }
-  // printf("%d\n",fd);
+
   lock_acquire (&file_lock);
   pin_string(buffer,buffer+size);
-  // printf("sbos\n");
   // Case 1: Reading from the keyboard (file descriptor 0)
   if (fd == STDIN_FILENO)
     {
