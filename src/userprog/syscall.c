@@ -230,7 +230,7 @@ create (const char *file, unsigned initial_size)
     {
       exit (-1);
     }
-  return filesys_create (file, initial_size);
+  return filesys_create (file, initial_size, INODE_TYPE_REGULAR);
 }
 
 /**

@@ -5,10 +5,15 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 
+enum inode_type {
+    INODE_TYPE_REGULAR, 
+    INODE_TYPE_DIRECTORY 
+};
+
 struct bitmap;
 
 void inode_init (void);
-bool inode_create (block_sector_t, off_t);
+bool inode_create (block_sector_t, off_t, enum inode_type);
 struct inode *inode_open (block_sector_t);
 struct inode *inode_reopen (struct inode *);
 block_sector_t inode_get_inumber (const struct inode *);
