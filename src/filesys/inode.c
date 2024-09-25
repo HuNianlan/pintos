@@ -64,14 +64,13 @@ static block_sector_t index_to_sector (const struct inode_disk *idisk,
 // static bool inode_allocate (size_t sectors, struct inode_disk *disk_inode);
 static bool inode_allocate(size_t sectors, struct inode_disk *disk_inode)
 {
-    // size_t allocated_sectors = 0;
-
     // Step 1: Allocate direct blocks.
     size_t direct_sectors = sectors < DIRECT_BLOCKS ? sectors : DIRECT_BLOCKS;
     if (direct_allocate(direct_sectors, disk_inode->direct_blocks) != direct_sectors)
         return false;
     // allocated_sectors += direct_sectors;
     sectors -= direct_sectors;
+    printf("remaining sectors after direct allocate: %i\n",sectors);
 
     // Step 2: Allocate indirect block.
     if (sectors > 0)
@@ -84,6 +83,7 @@ static bool inode_allocate(size_t sectors, struct inode_disk *disk_inode)
         // allocated_sectors += indirect_sectors;
         sectors -= indirect_sectors;
     }
+    printf("remaining sectors after indirect allocate: %i\n",sectors);
 
     // Step 3: Allocate double indirect block.
     if (sectors > 0)
@@ -95,20 +95,22 @@ static bool inode_allocate(size_t sectors, struct inode_disk *disk_inode)
             return false;
         sectors -= double_indirect_sectors;
     }
+    printf("remaining sectors after double direct allocate: %i\n",sectors);
 
     if (sectors > 0)
     {
       PANIC ("Memory full!");
     }
+        printf("2222222222222\n");
 
+// PANIC("inode_allocate");
     return true;
 }
 
 static size_t
 direct_allocate (size_t sectors, block_sector_t *direct_blocks)
 {
-  size_t i;
-  for (i = 0; i < sectors; i++)
+  for (size_t i = 0; i < sectors; i++)
     {
       if (!free_map_allocate (1, &direct_blocks[i]))
         {
@@ -124,19 +126,32 @@ direct_allocate (size_t sectors, block_sector_t *direct_blocks)
 static size_t
 indirect_allocate (size_t sectors, block_sector_t *indirect_block)
 {
-  block_sector_t *indirect_blocks = calloc(BLOCK_SECTOR_SIZE / sizeof(block_sector_t), sizeof(block_sector_t));
-  if (indirect_blocks == NULL)
+  printf ("indirect\n");
+  if (!free_map_allocate (1, &indirect_block))
     {
       return 0;
+      // 这里没有free direct 的 不知道会不会有问题
     }
-  size_t allocated_sectors = direct_allocate (sectors, indirect_blocks);
-  if (allocated_sectors > 0)
+
+  static char zeros[BLOCK_SECTOR_SIZE] = { 0 };
+  block_sector_t block_ctx[BLOCK_SECTOR_SIZE / 4] = { 0 };
+
+  for (size_t i = 0; i < sectors; i++)
     {
-      // Write the indirect block to disk.
-      block_write (fs_device, &indirect_block, indirect_blocks);
+      if (!free_map_allocate (1, &indirect_block))
+        {
+          // If allocation fails, release previously allocated blocks.
+          for (size_t j = 0; j < i; j++)
+            free_map_release (indirect_block[j], 1);
+          return i;
+        }
+      else
+        {
+          block_write (fs_device, block_ctx[i], zeros);
+        }
     }
-  free (indirect_blocks);
-  return allocated_sectors;
+  block_write (fs_device, *indirect_block, block_ctx);
+  return sectors;
 }
 
 static size_t
@@ -287,6 +302,8 @@ inode_create (block_sector_t sector, off_t length, enum inode_type type)
   if (disk_inode != NULL)
     {
       size_t sectors = bytes_to_sectors (length);
+      printf("length: %i\n", length);
+      printf("sectors: %i\n",sectors);
       memset (disk_inode->direct_blocks, 0,
               sizeof (disk_inode->direct_blocks));
       disk_inode->indirect_block = 0;
