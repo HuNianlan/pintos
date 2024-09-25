@@ -7,9 +7,11 @@
 #include "threads/thread.h"
 #include "vm/swap.h"
 #include "userprog/pagedir.h"
+#include "threads/vaddr.h"
 
 static struct list frame_table;
 static struct lock frame_table_lock;
+static struct list_elem *get_circular_clock (void);
 /* Clock hand pointer */
 static struct list_elem *clock_hand;
 static void vm_frame_set_pinned (void *kpage, bool new_value);
@@ -24,15 +26,15 @@ void frame_init (void){
 void *
 frame_alloc(struct vm_entry *vme,enum palloc_flags flags)
 {   
-
+    // printf("lock acquire in f alloc\n");
+    // printf("success\n");
+    // printf("input vaddr: %u\n",vme->vaddr);
+    ASSERT(is_user_vaddr(vme->vaddr));
     void *kpage = palloc_get_page(flags);
     if (kpage == NULL) {
-
         frame_evict();
         kpage = palloc_get_page(flags);
         ASSERT(kpage != NULL);
-        /* Implement appropriate frame eviction here if needed */
-        // PANIC("Out of memory: frame allocation failed and eviction not handled.");
     }
 
     struct frame *f = malloc(sizeof(struct frame));
@@ -47,9 +49,12 @@ frame_alloc(struct vm_entry *vme,enum palloc_flags flags)
     f->vme = vme;
     f->pinned = false;
 
-    lock_acquire(&frame_table_lock);
+    // lock_acquire(&frame_table_lock);
     list_push_back(&frame_table, &f->elem);
-    lock_release(&frame_table_lock);
+    // printf("frame alloc %u,%u,%u\n",f,f->vme,vme->vaddr);
+    // lock_release(&frame_table_lock);
+
+    // lock_release(&frame_lock);
 
     return kpage;
 }
@@ -67,6 +72,7 @@ frame_free(void *kpage)
             list_remove(e);
             palloc_free_page(kpage);
             free(f);
+            // printf("sb: %d\n",f);
             break;
         }
     }
@@ -103,20 +109,20 @@ frame_evict(void)
         break;
     case VM_ANON:
         vme->swap_index = swap_out(victim->kpage);
-    
     default:
         break;
     }
     victim->vme->is_loaded = false;
 
-    
-    /* Update the page directory and free resources */
-    pagedir_clear_page(t->pagedir, vme->vaddr);
-    
-    palloc_free_page(victim->kpage);
-    free(victim);
 
-    /* Return the evicted frame's page */
+    /* Update the page directory and free resources */
+    // printf("evict value %u,%u,%u\n",victim,victim->vme,victim->vme->vaddr);
+    pagedir_clear_page(t->pagedir, pg_round_down(vme->vaddr));
+
+    palloc_free_page(victim->kpage);
+    // frame_free(victim->kpage);
+    list_remove(&victim->elem);
+    free(victim);
     lock_release(&frame_table_lock);
 }
 
@@ -124,63 +130,51 @@ frame_evict(void)
 /*find the victim page and remove its elem from frame_table*/
 static struct frame* find_victim(void){
     /*f is the victim page*/
-    struct frame *f = NULL;
+    struct list_elem* e = get_circular_clock();
+    struct frame *f = list_entry(e, struct frame, elem);
     /* Ensure the clock hand is initialized */
-    if (clock_hand == NULL || clock_hand == list_end(&frame_table)) {
-        clock_hand = list_begin(&frame_table);
-    }
-
-    while (true) {
-        f = list_entry(clock_hand, struct frame, elem);
-        if(!f->pinned){
-            if (f->reference_bit) {
-                /* If reference bit is set, clear it and advance the hand */
-                f->reference_bit = false;
-            } else {
+    // if (clock_hand == NULL || clock_hand == list_end(&frame_table)) {
+    //     clock_hand = list_begin(&frame_table);
+    // }
+    
+    // while (true) {
+        while(f->pinned||pagedir_is_accessed (f->owner->pagedir, f->vme->vaddr)){
+            pagedir_set_accessed (f->owner->pagedir, f->vme->vaddr, false);
+            e = get_circular_clock();
+            f = list_entry(e, struct frame, elem);
                 /* If reference bit is clear, evict this frame */
-                list_remove(clock_hand);
-                return f;
-            }
-        }
+                // printf("find: %d\n",f);
+                // list_remove(clock_hand);
+
             /* Move the clock hand forward. */
-            clock_hand = list_next(clock_hand);
-            if (clock_hand == list_end(&frame_table)) {
-                clock_hand = list_begin(&frame_table);
+            // clock_hand = list_next(clock_hand);
+            // if (clock_hand == list_end(&frame_table)) {
+            //     // printf("chuan\n");
+            //     clock_hand = list_begin(&frame_table);
+            // }
             }
-    }
+    return f;
+
 }
 
 struct frame* find_frame(void* upage){
+    // lock_acquire(&frame_table_lock);
     struct list_elem* e;
     struct frame* f = NULL;
     for(e = list_front(&frame_table);e!= list_tail(&frame_table);e = list_next(e)){
         f = list_entry(e,struct frame,elem);
         if(f->vme->vaddr == upage) return f;
-
-        // if(f->kpage == kpage){
-        //     return f;
-        // }
     }
+    // lock_release(&frame_table_lock);
     return NULL;
+
 }
 
 static void
 vm_frame_set_pinned (void *upage, bool new_value)
 {
-    // printf("pin nm\n");
-
-  lock_acquire (&frame_table_lock);
-
-  // lookup
   struct frame* f = find_frame(upage);  
-//   struct hash_elem *h = hash_find (&frame_map, &(f_tmp.helem));
-  if (f == NULL) {
-    PANIC ("The frame to be pinned/unpinned does not exist");
-  }
-
   f->pinned = new_value;
-
-  lock_release (&frame_table_lock);
 }
 
 void
@@ -194,3 +188,20 @@ vm_frame_pin (void* upage) {
 }
 
 
+static struct list_elem *
+get_circular_clock (void)
+{
+  if(list_empty(&frame_table))
+    return NULL;
+  if (clock_hand == NULL || clock_hand == list_end (&frame_table))
+    {
+    //   if (list_empty (&frame_table))
+    //     return NULL;
+    //   else
+        return (clock_hand = list_begin (&frame_table));
+    }
+  clock_hand = list_next (&frame_table);
+  if (clock_hand == list_end (&clock_hand))
+      return get_circular_clock ();
+  return clock_hand;
+}

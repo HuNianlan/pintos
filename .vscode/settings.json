@@ -23,6 +23,7 @@
         "system_error": "c",
         "debug.h": "c",
         "swap.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "cstdio": "c"
     }
 }

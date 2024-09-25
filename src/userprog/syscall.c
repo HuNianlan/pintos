@@ -71,6 +71,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   else
     {
       int syscall_number = *esp;
+      // printf("in exec%d\n",syscall_number);
+
       switch (syscall_number)
         {
         case SYS_HALT:
@@ -186,6 +188,7 @@ exit (int status)
 static int
 write (int fd, const void *buffer, unsigned size)
 {
+  // printf("write syscall\n");
   if (buffer == NULL || !is_valid_buffer (buffer, size))
     {
       exit (-1);
@@ -249,7 +252,10 @@ create (const char *file, unsigned initial_size)
     {
       exit (-1);
     }
-  return filesys_create (file, initial_size);
+  lock_acquire(&file_lock);
+  bool success = filesys_create (file, initial_size);
+  lock_release(&file_lock);
+  return success;
 }
 
 /**
@@ -283,13 +289,16 @@ open (const char *file)
     }
 
   lock_acquire (&file_lock); // must acquire lock before filesys_open
+  // printf("in open\n");
 
   struct file *f = filesys_open (file);
   if (f == NULL)
     {
+      // printf("ji\n");
       lock_release (&file_lock);
       return -1;
     }
+  // printf("go 1\n");
 
   struct file_descripter *fd = malloc (sizeof (struct file_descripter));
   if (fd == NULL)
@@ -298,6 +307,7 @@ open (const char *file)
       lock_release (&file_lock);
       return -1;
     }
+  // printf("go 2\n");
 
   struct thread *cur = thread_current ();
   fd->fd = allocate_fd ();
@@ -497,6 +507,7 @@ tell (int fd)
 static pid_t
 exec (const char *cmd_line)
 {
+  // printf("in exec\n");
   if (cmd_line == NULL || !is_valid_pointer (cmd_line))
     {
       exit (-1);
@@ -505,6 +516,7 @@ exec (const char *cmd_line)
   lock_acquire (&file_lock);
   int status = process_execute (cmd_line);
   lock_release (&file_lock);
+  // printf("out exec\n");
   return status;
 }
 
@@ -553,6 +565,7 @@ exec (const char *cmd_line)
 static int
 wait (pid_t pid)
 {
+  printf("in wait\n");
   struct thread *t = get_thread_by_tid (pid);
   if (t == NULL)
     {
@@ -684,6 +697,8 @@ static mapid_t mmap (int fd, void *addr){
       
       vme->type = VM_FILE;
       vme->vaddr = addr + offset;
+      // printf("mmap %u\n",(vme->vaddr));
+
       vme->read_bytes = read_bytes;
       vme->zero_bytes = zero_bytes;
       vme->offset = offset;
@@ -715,21 +730,6 @@ static void munmap (mapid_t mapping){
 
         if (mmap_file->id == mapping) {
           remove_mmap(mmap_file);
-          // while (!list_empty(&mmap_file->vm_entries)) {
-          //     struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
-          //     struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
-
-          //     if (pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
-          //         file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
-          //     }
-
-          //     frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
-          //     pagedir_clear_page(curr->pagedir, vme->vaddr);
-
-          //     delete_vme(curr->vm, vme);
-          //     free(vme);
-          // }
-
             file_close(mmap_file->file);
             list_remove(&mmap_file->elem);
             free(mmap_file);

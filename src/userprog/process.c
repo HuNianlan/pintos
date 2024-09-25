@@ -527,6 +527,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /*Setting vm_entry members, offset and size of file to read when virtual page is required, zero byte to pad at the end ...*/
       vme->type = VM_BIN;
       vme->vaddr = upage;
+      // printf("load seg %u\n",(vme->vaddr));
       vme->read_bytes = page_read_bytes;
       vme->zero_bytes = page_zero_bytes;
       vme->offset = ofs;
@@ -590,6 +591,8 @@ setup_stack (void **esp)
   // Initialize the vm_entry members
   vme->type = VM_ANON;          // Indicates this is a stack page, not a file-backed page
   vme->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  // printf("set up stack%u ",vme->vaddr);
+
   vme->read_bytes = 0;          // No file to read from
   vme->zero_bytes = PGSIZE;     // All bytes are zeroed
   vme->offset = 0;              // No file offset
@@ -613,7 +616,7 @@ setup_stack (void **esp)
       if (success)
         *esp = PHYS_BASE;
       else
-        palloc_free_page (kpage);
+        frame_free (kpage);
     }
 
 
@@ -687,6 +690,7 @@ handle_mm_fault(struct vm_entry* vme){
   bool success = false;
   /* Get a page of memory. */
   // uint8_t *kpage = palloc_get_page (PAL_USER);
+  // printf("%u\n",vme->vaddr);
   uint8_t *kpage = frame_alloc(vme,PAL_USER);
   
   if (kpage == NULL){
@@ -716,7 +720,7 @@ handle_mm_fault(struct vm_entry* vme){
     success = false;
     break;
   }
-  
+
   if(success) vme->is_loaded = true;
 
 
@@ -747,6 +751,8 @@ bool grow_stack (void* fault_addr)
   }
   vme->type = VM_ANON;  // This is a stack page, not a file-backed page
   vme->vaddr = upage;
+  // printf("grow stack %u",vme->vaddr);
+
   vme->read_bytes = PGSIZE;
   vme->zero_bytes = 0;
   vme->offset = 0;
@@ -761,7 +767,7 @@ bool grow_stack (void* fault_addr)
     free(vme);
     return false;
   }
-
+  // printf("grow stack f");
   uint8_t *kpage = frame_alloc(vme,PAL_USER|PAL_ZERO);
   
   if (kpage == NULL){
@@ -796,6 +802,7 @@ void remove_mmap(struct mmap_file* mmap_file){
         file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
     }
     vme->is_loaded = false;
+    // printf("remove mmf\n");
     frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
     pagedir_clear_page(curr->pagedir, vme->vaddr);
 
