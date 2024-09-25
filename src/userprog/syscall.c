@@ -135,6 +135,8 @@ halt (void)
 void
 exit (int status)
 {
+  if(lock_held_by_current_thread(&file_lock))
+    lock_release(&file_lock);
   struct thread *t = thread_current ();
   t->exit_status = status;
   struct list_elem *l;
@@ -299,6 +301,7 @@ open (const char *file)
   list_push_back (&cur->fd_list, &fd->thread_elem);
 
   lock_release (&file_lock);
+  // printf("open complete\n");
   return fd->fd;
 }
 
@@ -355,9 +358,8 @@ read (int fd, void *buffer, unsigned size)
     {
       exit (-1);
     }
-  // printf("lock_acquire in read\n");
+  // printf("%d\n",fd);
   lock_acquire (&file_lock);
-
   // Case 1: Reading from the keyboard (file descriptor 0)
   if (fd == STDIN_FILENO)
     {
@@ -562,7 +564,8 @@ bool
 is_valid_pointer (const void *ptr)
 {
   if (ptr == NULL || !is_user_vaddr (ptr)
-      || pagedir_get_page (thread_current ()->pagedir, ptr) == NULL
+      ||find_vme(pg_round_down(ptr)) == NULL
+      // || pagedir_get_page (thread_current ()->pagedir, ptr) == NULL
       || ptr < (void *)0x08048000)
     return false;
   return true;
