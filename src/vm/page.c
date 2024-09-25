@@ -82,14 +82,18 @@ static void vm_destroy_func(struct hash_elem* e, void *aux UNUSED) {
 bool 
 load_file(void* kaddr,struct vm_entry *vme){
 /*?*/
+    // printf("in load file\n");
     size_t page_read_bytes = vme->read_bytes < PGSIZE ? vme->read_bytes : PGSIZE;
     file_seek(vme->file,vme->offset);
     /*use file_read_at*/
     if( file_read(vme->file,kaddr,vme->read_bytes)!= (int)page_read_bytes)
     {
+        // printf("out load file\n");
         return false;
     }
     memset (kaddr + page_read_bytes, 0, vme->zero_bytes);
+    // printf("out load file\n");
+
     return true;
 }
 

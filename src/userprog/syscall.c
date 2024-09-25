@@ -690,6 +690,7 @@ static mapid_t mmap (int fd, void *addr){
       vme->file = file;
       vme->writable = true;
 
+
       if (!insert_vme(t->vm, vme)) {
           free(vme);
           munmap(mmap_file->id);  // Roll back changes
@@ -765,8 +766,12 @@ static void pin_string (const char *begin, const char *end)
     if (!vme->writable){
       exit (-1);
     }
-    if (vme->is_loaded == false)
-      handle_mm_fault (vme);
+    bool result;
+    // printf("a? %d\n",vme->is_loaded == true);
+    // printf("ffff: %u\n",find_vme(pg_round_down(begin)));
+    if (vme->is_loaded == false){
+      result = handle_mm_fault (vme);
+    }
     vm_frame_pin(pg_round_down(begin)); 
   }
 
@@ -777,8 +782,11 @@ static void unpin_string (const char *begin, const char *end)
 {
   for (; begin < end; begin += PGSIZE){
     struct frame* f = find_frame(pg_round_down(begin));
-    if (!f->vme->writable)
-      exit (-1);
-    vm_frame_unpin(pg_round_down(begin)); 
+    f->pinned = false;
+    // if(f==NULL)
+    //   printf("sbnm\n");
+    // if (!f->vme->writable)
+    //   exit (-1);
+    // vm_frame_unpin(pg_round_down(begin)); 
   }
 }

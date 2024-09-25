@@ -533,6 +533,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       vme->file = file;
       vme->writable = writable;
       vme->swap_index = -1;
+      vme->is_loaded = false;
 
       /*Add vm_entry to hash table by insert_vme*/
       bool result = insert_vme(thread_current()->vm,vme);
@@ -700,12 +701,9 @@ handle_mm_fault(struct vm_entry* vme){
 
   case VM_BIN:
     success = load_file(kpage,vme);
-    if(success) vme->is_loaded = true;
-
     break;
   case VM_FILE:
     success = load_file(kpage,vme);
-    if(success) vme->is_loaded = true;
   case VM_ANON:
     if(vme->swap_index != -1){
       swap_in(vme->swap_index,kpage);
@@ -718,12 +716,8 @@ handle_mm_fault(struct vm_entry* vme){
     success = false;
     break;
   }
-
-  /*determine whether to grow stack*/
-  // if(success == false && grow){
-  //   success = grow_stack(vme->vaddr);
-  // }
-
+  
+  if(success) vme->is_loaded = true;
 
 
   if(success == false){
