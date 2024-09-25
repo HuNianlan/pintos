@@ -22,6 +22,7 @@ struct vm_entry{
     off_t offset;
     struct file* file;
     bool writable;
+    bool is_loaded;
 
     size_t swap_index;/*when it is not on swap, set it to -1*/
 

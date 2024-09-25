@@ -44,8 +44,8 @@ void frame_evict(void);
 
 //swap out page
 
-void vm_frame_pin (void* kpage);
-void vm_frame_unpin (void* kpage);
+void vm_frame_pin (void* upage);
+void vm_frame_unpin (void* upage);
 
-
+struct frame* find_frame(void* upage);
 #endif /* vm/fram.h */

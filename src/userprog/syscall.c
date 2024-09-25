@@ -46,6 +46,11 @@ static void close (int fd);
 static mapid_t mmap (int, void *);
 static void munmap (mapid_t);
 
+
+
+static void unpin_string (const char *begin, const char *end);
+static void pin_string (const char *begin, const char *end);
+
 void
 syscall_init (void)
 {
@@ -360,11 +365,14 @@ read (int fd, void *buffer, unsigned size)
     }
   // printf("%d\n",fd);
   lock_acquire (&file_lock);
+  pin_string(buffer,buffer+size);
+  // printf("sbos\n");
   // Case 1: Reading from the keyboard (file descriptor 0)
   if (fd == STDIN_FILENO)
     {
       for (unsigned i = 0; i < size; i++)
         *((char **)buffer)[i] = input_getc ();
+      unpin_string(buffer,buffer+size);
       lock_release (&file_lock);
       return size;
     }
@@ -372,6 +380,7 @@ read (int fd, void *buffer, unsigned size)
   // Case 2: Trying to read from the output stream is invalid
   else if (fd == STDOUT_FILENO)
     {
+      unpin_string(buffer,buffer+size);
       lock_release (&file_lock);
       return -1;
     }
@@ -387,6 +396,7 @@ read (int fd, void *buffer, unsigned size)
           return -1;
         }
       int status = file_read (f, buffer, size);
+      unpin_string(buffer,buffer+size);
       lock_release (&file_lock);
       return status;
     }
@@ -744,3 +754,30 @@ static void munmap (mapid_t mapping){
 //     free(vme);
 //   }
 // }
+
+static void pin_string (const char *begin, const char *end)
+{
+  for (; begin < end; begin += PGSIZE){
+    struct vm_entry* vme = find_vme(pg_round_down(begin));
+    if(vme == NULL)
+      exit(-1);
+    if (!vme->writable){
+      exit (-1);
+    }
+    if (vme->is_loaded == false)
+      handle_mm_fault (vme);
+    vm_frame_pin(pg_round_down(begin)); 
+  }
+
+}
+
+
+static void unpin_string (const char *begin, const char *end)
+{
+  for (; begin < end; begin += PGSIZE){
+    struct frame* f = find_frame(pg_round_down(begin));
+    if (!f->vme->writable)
+      exit (-1);
+    vm_frame_unpin(pg_round_down(begin)); 
+  }
+}

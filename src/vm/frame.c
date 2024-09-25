@@ -107,7 +107,8 @@ frame_evict(void)
     default:
         break;
     }
-    
+    victim->vme->is_loaded = false;
+
     
     /* Update the page directory and free resources */
     pagedir_clear_page(t->pagedir, vme->vaddr);
@@ -149,25 +150,29 @@ static struct frame* find_victim(void){
     }
 }
 
-static struct frame* find_frame(void* kpage){
+struct frame* find_frame(void* upage){
     struct list_elem* e;
     struct frame* f = NULL;
     for(e = list_front(&frame_table);e!= list_tail(&frame_table);e = list_next(e)){
         f = list_entry(e,struct frame,elem);
-        if(f->kpage == kpage){
-            return f;
-        }
+        if(f->vme->vaddr == upage) return f;
+
+        // if(f->kpage == kpage){
+        //     return f;
+        // }
     }
     return NULL;
 }
 
 static void
-vm_frame_set_pinned (void *kpage, bool new_value)
+vm_frame_set_pinned (void *upage, bool new_value)
 {
+    // printf("pin nm\n");
+
   lock_acquire (&frame_table_lock);
 
   // lookup
-  struct frame* f = find_frame(kpage);  
+  struct frame* f = find_frame(upage);  
 //   struct hash_elem *h = hash_find (&frame_map, &(f_tmp.helem));
   if (f == NULL) {
     PANIC ("The frame to be pinned/unpinned does not exist");
@@ -179,11 +184,13 @@ vm_frame_set_pinned (void *kpage, bool new_value)
 }
 
 void
-vm_frame_unpin (void* kpage) {
-  vm_frame_set_pinned (kpage, false);
+vm_frame_unpin (void* upage) {
+  vm_frame_set_pinned (upage, false);
 }
 
 void
-vm_frame_pin (void* kpage) {
-  vm_frame_set_pinned (kpage, true);
+vm_frame_pin (void* upage) {
+  vm_frame_set_pinned (upage, true);
 }
+
+

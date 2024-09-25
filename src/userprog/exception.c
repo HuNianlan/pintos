@@ -156,6 +156,8 @@ page_fault (struct intr_frame *f)
 
    /* For bad_tests*/
   if (!not_present || is_kernel_vaddr (fault_addr)||fault_addr == NULL){
+   // f->eip = f->eax;
+   // f->eax = -1;
    // printf("invalid address\n");
    exit (-1);
   }
@@ -170,6 +172,9 @@ page_fault (struct intr_frame *f)
    }
 
    if(result== false){
+      // f->eip = f->eax;
+      // f->eax = -1;
+  
       exit(-1);
    }
   /* To implement virtual memory, delete the rest of the function

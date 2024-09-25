@@ -592,10 +592,9 @@ setup_stack (void **esp)
   vme->read_bytes = 0;          // No file to read from
   vme->zero_bytes = PGSIZE;     // All bytes are zeroed
   vme->offset = 0;              // No file offset
-  vme->file = NULL;             // No backing file
   vme->writable = true;         // The stack should be writable
   vme->swap_index = -1;
-
+  vme->is_loaded = false;
   // Insert vm_entry into the process's vm hash table
   if (!insert_vme(thread_current()->vm, vme))
   {
@@ -701,12 +700,20 @@ handle_mm_fault(struct vm_entry* vme){
 
   case VM_BIN:
     success = load_file(kpage,vme);
+    if(success) vme->is_loaded = true;
+
     break;
   case VM_FILE:
     success = load_file(kpage,vme);
+    if(success) vme->is_loaded = true;
   case VM_ANON:
     if(vme->swap_index != -1){
       swap_in(vme->swap_index,kpage);
+      if (!install_page (vme->vaddr, kpage, vme->writable))
+        {
+          frame_free(kpage);
+          return false; 
+        }
       vme->swap_index = -1;
       success = true;
     }
@@ -757,6 +764,7 @@ bool grow_stack (void* fault_addr)
   vme->file = NULL;
   vme->writable = true;
   vme->swap_index = -1;
+  vme->is_loaded = true;
   
   // Insert vm_entry into the process's vm hash table
   if (!insert_vme(thread_current()->vm, vme))
@@ -795,10 +803,10 @@ void remove_mmap(struct mmap_file* mmap_file){
     struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
     struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
 
-    if (pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
+    if (vme->is_loaded && pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
         file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
     }
-
+    vme->is_loaded = false;
     frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
     pagedir_clear_page(curr->pagedir, vme->vaddr);
 
