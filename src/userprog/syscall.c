@@ -707,10 +707,10 @@ static mapid_t mmap (int fd, void *addr){
       vme->offset = offset;
       vme->file = file;
       vme->writable = true;
-
+      vme->swap_index = -1;
 
       if (!insert_vme(t->vm, vme)) {
-          free(vme);
+          // free(vme);
           munmap(mmap_file->id);  // Roll back changes
           lock_release (&file_lock);
           return -1;
@@ -733,10 +733,10 @@ static void munmap (mapid_t mapping){
 
         if (mmap_file->id == mapping) {
           remove_mmap(mmap_file);
-            file_close(mmap_file->file);
-            list_remove(&mmap_file->elem);
-            free(mmap_file);
-            return;
+          file_close(mmap_file->file);
+          list_remove(&mmap_file->elem);
+          free(mmap_file);
+          return;
         }
     }
   }
