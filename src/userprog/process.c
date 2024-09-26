@@ -807,6 +807,6 @@ void remove_mmap(struct mmap_file* mmap_file){
     pagedir_clear_page(curr->pagedir, vme->vaddr);
 
     delete_vme(curr->vm, vme);
-    free(vme);
+    // free(vme);
   }
 }
