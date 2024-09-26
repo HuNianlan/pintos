@@ -370,29 +370,32 @@ static int
 read (int fd, void *buffer, unsigned size)
 {
   // printf("sbos\n");
-
-  if (buffer == NULL || !is_valid_buffer (buffer, size))
-    {
-      exit (-1);
-    }
+  pin_string(buffer,buffer+size);
 
   lock_acquire (&file_lock);
-  pin_string(buffer,buffer+size);
+  if (buffer == NULL || !is_valid_buffer (buffer, size))
+    {
+      lock_release(&file_lock);
+      return -1;
+    }
+
+  // lock_acquire (&file_lock);
   // Case 1: Reading from the keyboard (file descriptor 0)
   if (fd == STDIN_FILENO)
     {
       for (unsigned i = 0; i < size; i++)
         *((char **)buffer)[i] = input_getc ();
-      unpin_string(buffer,buffer+size);
       lock_release (&file_lock);
+      unpin_string(buffer,buffer+size);
+
       return size;
     }
 
   // Case 2: Trying to read from the output stream is invalid
   else if (fd == STDOUT_FILENO)
     {
-      unpin_string(buffer,buffer+size);
       lock_release (&file_lock);
+      unpin_string(buffer,buffer+size);
       return -1;
     }
 
@@ -404,11 +407,12 @@ read (int fd, void *buffer, unsigned size)
       if (f == NULL)
         {
           lock_release (&file_lock);
+          unpin_string(buffer,buffer+size);
           return -1;
         }
       int status = file_read (f, buffer, size);
-      unpin_string(buffer,buffer+size);
       lock_release (&file_lock);
+      unpin_string(buffer,buffer+size);
       return status;
     }
 }
@@ -565,7 +569,6 @@ exec (const char *cmd_line)
 static int
 wait (pid_t pid)
 {
-  printf("in wait\n");
   struct thread *t = get_thread_by_tid (pid);
   if (t == NULL)
     {
@@ -766,11 +769,11 @@ static void pin_string (const char *begin, const char *end)
     if (!vme->writable){
       exit (-1);
     }
-    bool result;
+    // bool result;
     // printf("a? %d\n",vme->is_loaded == true);
     // printf("ffff: %u\n",find_vme(pg_round_down(begin)));
     if (vme->is_loaded == false){
-      result = handle_mm_fault (vme);
+      handle_mm_fault (vme);
     }
     vm_frame_pin(pg_round_down(begin)); 
   }
