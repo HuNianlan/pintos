@@ -787,38 +787,59 @@ bool grow_stack (void* fault_addr)
     return false;
   }
 
-  // /* update associated page table entry after loading into physical memory. */
-  // if (!install_page (vme->vaddr, kpage, vme->writable))
-  //   {
-  //     frame_free (kpage);
-  //     return false;
-  //   }
+  /* update associated page table entry after loading into physical memory. */
+  if (!install_page (vme->vaddr, kpage, vme->writable))
+    {
+      frame_free (kpage);
+      return false;
+    }
   
   // return true;
       /* Add the page to the process's address space. */
-  if (!pagedir_set_page (thread_current()->pagedir, upage, kpage, true))
-	{
-	  frame_free (kpage);
-    return false;
-	}
+  // if (!pagedir_set_page (thread_current()->pagedir, upage, kpage, true))
+	// {
+	//   frame_free (kpage);
+  //   return false;
+	// }
   return true;
 }
 
 void remove_mmap(struct mmap_file* mmap_file){
+  if(mmap_file == NULL) return;
+  struct list_elem *e;
+  for (e = list_begin (&mmap_file->vm_entries);
+       e != list_end (&mmap_file->vm_entries); )
+    {
+      struct vm_entry *vme = list_entry (e, struct vm_entry, mmap_elem);
+      if (vme->is_loaded &&
+          pagedir_is_dirty(thread_current()->pagedir, vme->vaddr)
+          )
+        {
+            file_write_at (vme->file, vme->vaddr, vme->read_bytes, vme->offset);
+              // != (int) vme->read_bytes)
+            //  (vme->vaddr);
+            frame_free(pagedir_get_page(thread_current()->pagedir, vme->vaddr));
+            pagedir_clear_page(thread_current()->pagedir, vme->vaddr);
+        }
+      vme->is_loaded = false;
+      e = list_remove (e);
+      delete_vme (thread_current()->vm, vme);
+    }
+  list_remove (&mmap_file->elem);
+}
+
+struct mmap_file *
+find_mmap_file (int mapid)
+{
   struct thread* curr = thread_current();
-  // while (!list_empty(&mmap_file->vm_entries)) {
-  //   struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
-  //   struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
-
-    // if (vme->is_loaded && pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
-    //     file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
-    // }
-    // vme->is_loaded = false;
-    // printf("remove mmf\n");
-    // frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
-    // pagedir_clear_page(curr->pagedir, vme->vaddr);
-
-    // delete_vme(curr->vm, vme);
-    // free(vme);
-  // }
+  struct list_elem *e;
+  for (e = list_begin (&thread_current ()->mmap_list);
+       e != list_end (&thread_current ()->mmap_list);
+       e = list_next (e))
+    {
+      struct mmap_file *mmap_file = list_entry (e, struct mmap_file, elem);
+      if (mmap_file->id == mapid)
+        return mmap_file;
+    }
+  return NULL; 
 }

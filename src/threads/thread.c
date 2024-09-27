@@ -297,19 +297,31 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+
+  /*ummap*/
+  struct list_elem *e;
+  struct thread *curr = thread_current();
+
+  // for (e = list_begin(&curr->mmap_list); e != list_end(&curr->mmap_list); e = list_next(e)) {
+  //   struct mmap_file *mmap_file = list_entry(e, struct mmap_file, elem);
+  //   remove_mmap(mmap_file);
+  //   file_close(mmap_file->file);
+  //   list_remove(&mmap_file->elem);
+  //   free(mmap_file);
+  // }
+  for (int mapid = 1; mapid < curr->next_mapid; mapid++)
+    {
+      struct mmap_file *mmap_file = find_mmap_file (mapid);
+      if (mmap_file)
+        remove_mmap (mmap_file);
+    }
   process_exit ();
 
-  // /*ummap*/
-  struct thread *curr = thread_current();
-  struct list_elem *e;
 
-  for (e = list_begin(&curr->mmap_list); e != list_end(&curr->mmap_list); e = list_next(e)) {
-    struct mmap_file *mmap_file = list_entry(e, struct mmap_file, elem);
-    remove_mmap(mmap_file);
-    file_close(mmap_file->file);
-    list_remove(&mmap_file->elem);
-    // free(mmap_file);
-  }
+
+
+
+
   
 #endif
 

@@ -30,6 +30,6 @@ struct file_descripter
 };
 
 void remove_mmap(struct mmap_file* mmap_file);
-
+struct mmap_file *find_mmap_file (int mapid);
 
 #endif /* userprog/process.h */

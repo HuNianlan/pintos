@@ -141,10 +141,10 @@ halt (void)
 void
 exit (int status)
 {
-  static int x = 0;
-  if(status == -1){
-    x++;
-  }
+  // static int x = 0;
+  // if(status == -1){
+  //   x++;
+  // }
   if(lock_held_by_current_thread(&file_lock))
     lock_release(&file_lock);
   struct thread *t = thread_current ();
@@ -770,9 +770,6 @@ static void pin_string (const char *begin, const char *end)
     if (!vme->writable){
       exit (-1);
     }
-    // bool result;
-    // printf("a? %d\n",vme->is_loaded == true);
-    // printf("ffff: %u\n",find_vme(pg_round_down(begin)));
     if (vme->is_loaded == false){
       handle_mm_fault (vme);
     }
