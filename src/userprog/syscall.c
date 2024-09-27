@@ -141,18 +141,19 @@ halt (void)
 void
 exit (int status)
 {
+  static int x = 0;
+  if(status == -1){
+    x++;
+  }
   if(lock_held_by_current_thread(&file_lock))
     lock_release(&file_lock);
   struct thread *t = thread_current ();
   t->exit_status = status;
-  struct list_elem *l;
-  while (!list_empty (&t->fd_list))
-    {
-      l = list_begin (&t->fd_list);
-      close (list_entry (l, struct file_descripter, thread_elem)->fd);
-    }
 
   thread_exit ();
+  // if(x==5) PANIC("smwy");
+
+
 }
 
 /**

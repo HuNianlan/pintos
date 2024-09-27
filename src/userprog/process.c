@@ -171,6 +171,8 @@ process_wait (tid_t child_tid UNUSED)
 
   ret = -1;
   t = get_thread_by_tid (child_tid);
+  if(t->status == THREAD_DYING)
+    return t->exit_status;
   if (t->status == THREAD_DYING || t->exit_status == RET_STATUS_INVALID)
     goto done;
   if (t->exit_status != RET_STATUS_DEFAULT
@@ -804,19 +806,19 @@ bool grow_stack (void* fault_addr)
 
 void remove_mmap(struct mmap_file* mmap_file){
   struct thread* curr = thread_current();
-  while (!list_empty(&mmap_file->vm_entries)) {
-    struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
-    struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
+  // while (!list_empty(&mmap_file->vm_entries)) {
+  //   struct list_elem *velem = list_pop_front(&mmap_file->vm_entries);
+  //   struct vm_entry *vme = list_entry(velem, struct vm_entry, mmap_elem);
 
-    if (vme->is_loaded && pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
-        file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
-    }
-    vme->is_loaded = false;
+    // if (vme->is_loaded && pagedir_is_dirty(curr->pagedir, vme->vaddr)) {
+    //     file_write_at(mmap_file->file, vme->vaddr, vme->read_bytes, vme->offset);
+    // }
+    // vme->is_loaded = false;
     // printf("remove mmf\n");
-    frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
-    pagedir_clear_page(curr->pagedir, vme->vaddr);
+    // frame_free(pagedir_get_page(curr->pagedir, vme->vaddr));
+    // pagedir_clear_page(curr->pagedir, vme->vaddr);
 
-    delete_vme(curr->vm, vme);
+    // delete_vme(curr->vm, vme);
     // free(vme);
-  }
+  // }
 }

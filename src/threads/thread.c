@@ -299,7 +299,7 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 
-  /*ummap*/
+  // /*ummap*/
   struct thread *curr = thread_current();
   struct list_elem *e;
 
@@ -308,7 +308,7 @@ thread_exit (void)
     remove_mmap(mmap_file);
     file_close(mmap_file->file);
     list_remove(&mmap_file->elem);
-    free(mmap_file);
+    // free(mmap_file);
   }
   
 #endif
