@@ -110,11 +110,11 @@ start_process (void *file_name_)
 
   success = load (file_name, &if_.eip, &if_.esp);
 
-  struct file *file = filesys_open (file_name);
-  if (file == NULL)
-    {
-      success = false;
-    }
+  // struct file *file = filesys_open (file_name);
+  // if (file == NULL)
+  //   {
+  //     success = false;
+  //   }
 
   /* If load failed, quit. */
   if (!success)
@@ -133,8 +133,7 @@ start_process (void *file_name_)
     {
       push_arguments (&if_.esp, argc, argv, cmdlength + argc);
 
-      file_deny_write (file);
-      t->exec_file = file;
+
 
       sema_up (&t->wait);
       intr_disable ();
@@ -352,6 +351,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done;
     }
+  t->exec_file = file;
+  file_deny_write (file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -433,7 +434,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
   return success;
 }
 

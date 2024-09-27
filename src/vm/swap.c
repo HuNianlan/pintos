@@ -5,6 +5,7 @@
 #include <bitmap.h>
 #include <debug.h>
 
+extern struct clock file_lock;
 // The swap block device
 static struct block *swap_block;
 // Bitmap to track used/unused swap slots
@@ -35,7 +36,7 @@ void swap_in(swap_slot_t slot, void *frame)
 {
     ASSERT(slot < bitmap_size(swap_map));
     ASSERT(frame != NULL);
-
+    lock_acquire(&file_lock);
     lock_acquire(&swap_lock);
 
     if (bitmap_test(swap_map, slot)) {
@@ -46,12 +47,14 @@ void swap_in(swap_slot_t slot, void *frame)
     }
 
     lock_release(&swap_lock);
+    lock_release(&file_lock);
 }
 
 swap_slot_t swap_out(void *frame) 
 {
     ASSERT(frame != NULL);
-
+    
+    lock_acquire(&file_lock);
     lock_acquire(&swap_lock);
 
     swap_slot_t slot = bitmap_scan_and_flip(swap_map, 0, 1, false);
@@ -64,5 +67,7 @@ swap_slot_t swap_out(void *frame)
     }
 
     lock_release(&swap_lock);
+    lock_release(&file_lock);
+
     return slot;
 }
