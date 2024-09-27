@@ -6,12 +6,6 @@
 
 void syscall_init (void);
 void exit (int status); // used in exception, page_fault()
-
-struct file_descripter
-{
-    int fd;
-    struct file *file;
-    struct list_elem thread_elem;
-};
+void close (int fd);
 
 #endif /* userprog/syscall.h */

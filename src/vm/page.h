@@ -24,7 +24,7 @@ struct vm_entry{
     bool writable;
     bool is_loaded;
 
-    size_t swap_index;/*when it is not on swap, set it to -1*/
+    int swap_index;/*when it is not on swap, set it to -1*/
 
     struct hash_elem elem;
     struct list_elem mmap_elem;

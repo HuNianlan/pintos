@@ -20,6 +20,15 @@ struct mmap_file {
     struct list vm_entries;    /* List of vm_entry objects */
     struct list_elem elem;
 };
+
+
+struct file_descripter
+{
+    int fd;
+    struct file *file;
+    struct list_elem thread_elem;
+};
+
 void remove_mmap(struct mmap_file* mmap_file);
 
 

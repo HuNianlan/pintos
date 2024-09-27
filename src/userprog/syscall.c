@@ -42,7 +42,6 @@ static int read (int fd, void *buffer, unsigned size);
 static int write (int fd, const void *buffer, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
-static void close (int fd);
 static mapid_t mmap (int, void *);
 static void munmap (mapid_t);
 
@@ -645,6 +644,7 @@ find_file (int fd)
 
 
 static mapid_t mmap (int fd, void *addr){
+  if(!is_user_vaddr(addr)) return -1;
   if (addr == NULL || (pg_ofs (addr) != 0)||fd == 0 || fd == 1)
     return -1;
 

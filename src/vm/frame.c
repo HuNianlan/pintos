@@ -195,13 +195,10 @@ get_circular_clock (void)
     return NULL;
   if (clock_hand == NULL || clock_hand == list_end (&frame_table))
     {
-    //   if (list_empty (&frame_table))
-    //     return NULL;
-    //   else
         return (clock_hand = list_begin (&frame_table));
     }
   clock_hand = list_next (&frame_table);
-  if (clock_hand == list_end (&clock_hand))
+  if (clock_hand == list_end (&frame_table))
       return get_circular_clock ();
   return clock_hand;
 }

@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include "userprog/syscall.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 #include "vm/swap.h"
@@ -197,6 +197,14 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  // struct thread *t = thread_current ();
+  // t->exit_status = status;
+  struct list_elem *l;
+  while (!list_empty (&cur->fd_list))
+  {
+    l = list_begin (&cur->fd_list);
+    close (list_entry (l, struct file_descripter, thread_elem)->fd);
+  }
 
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
@@ -709,6 +717,7 @@ handle_mm_fault(struct vm_entry* vme){
     break;
   case VM_FILE:
     success = load_file(kpage,vme);
+    break;
   case VM_ANON:
     if(vme->swap_index != -1){
       swap_in(vme->swap_index,kpage);
