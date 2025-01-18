@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir 
@@ -26,7 +27,7 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), INODE_TYPE_DIRECTORY);
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -192,6 +193,9 @@ dir_remove (struct dir *dir, const char *name)
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+  if (!strcmp (name, ".") || !strcmp (name, ".."))
+    return false;
+
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
     goto done;
@@ -200,6 +204,13 @@ dir_remove (struct dir *dir, const char *name)
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
+
+  /* If deleting process dir, set dir_removed to true. 
+    So next time visiting this dir is invalid */
+  if (inode_get_inumber (thread_current ()->dir->inode) == inode_get_inumber (inode))
+    {
+      thread_current ()->dir_removed = true;
+    }
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -223,10 +234,11 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
 
+  // . and .. should not be returned by readdir.
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
-      if (e.in_use)
+      if (e.in_use && strcmp (e.name, ".") && strcmp (e.name, ".."))
         {
           strlcpy (name, e.name, NAME_MAX + 1);
           return true;

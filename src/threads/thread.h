@@ -110,6 +110,8 @@ struct thread
     struct file* exec_file;
 #endif
 
+    struct dir *dir;          /* thread's current working directory*/
+    bool dir_removed;         // whether the working dir is removed
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

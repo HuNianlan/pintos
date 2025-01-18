@@ -11,6 +11,7 @@
 #include "userprog/process.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <filesys/directory.h>
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
@@ -40,6 +41,14 @@ static int write (int fd, const void *buffer, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
+
+/* filesys*/
+static bool chdir (const char *dir);
+static bool mkdir (const char *dir);
+static bool readdir (int fd, char *name);
+static bool isdir (int fd);
+static int inumber (int fd);
+
 
 void
 syscall_init (void)
@@ -102,6 +111,21 @@ syscall_handler (struct intr_frame *f UNUSED)
         case SYS_CLOSE:
           close (*(esp + 1));
           break;
+        case SYS_CHDIR:
+          f->eax = chdir ((char *)*(esp + 1));
+          break;
+        case SYS_MKDIR:
+          f->eax = mkdir ((char *)*(esp + 1));
+          break;
+        case SYS_READDIR:
+          f->eax = readdir (*(esp + 1), (char *)*(esp + 2));
+          break;
+        case SYS_ISDIR:
+          f->eax = isdir (*(esp + 1));
+          break;
+        case SYS_INUMBER:
+          f->eax = inumber (*(esp + 1));
+          break;
         default:
           exit (-1);
           break;
@@ -123,6 +147,8 @@ halt (void)
 void
 exit (int status)
 {
+  if(lock_held_by_current_thread(&file_lock))
+    lock_release(&file_lock);
   struct thread *t = thread_current ();
   t->exit_status = status;
   struct list_elem *l;
@@ -193,7 +219,8 @@ write (int fd, const void *buffer, unsigned size)
   else
     {
       struct file *f = find_file (fd);
-      if (f == NULL)
+      // should not write to dir
+      if (f == NULL || find_file_descripter (fd)->dir != NULL)
         {
           lock_release (&file_lock);
           return -1;
@@ -230,7 +257,10 @@ create (const char *file, unsigned initial_size)
     {
       exit (-1);
     }
-  return filesys_create (file, initial_size, INODE_TYPE_REGULAR);
+  lock_acquire(&file_lock);
+  bool success = filesys_create (file, initial_size, false); // not dir: is file
+  lock_release(&file_lock);
+  return success;
 }
 
 /**
@@ -286,6 +316,28 @@ open (const char *file)
 
   list_push_back (&cur->fd_list, &fd->thread_elem);
 
+  /* newly added for subdirs*/
+  // 没处理如果open dir会怎么样
+  struct inode *inode = file_get_inode (f);
+  if (inode == NULL)
+    {
+      file_close (f);
+      lock_release (&file_lock);
+      return -1;
+    }
+
+  if (inode_is_dir (inode))
+    {
+      // printf ("in open, inode_is_dir (inode)\n");
+      fd->dir = dir_open (inode_reopen (inode));
+      ASSERT (fd->dir != NULL);
+      // printf ("fd: %d,   fd->dir: %p \n", fd->fd, fd->dir);
+    }
+  else
+    {
+      fd->dir = NULL;
+      fd->file = f;
+    }
   lock_release (&file_lock);
   return fd->fd;
 }
@@ -306,6 +358,8 @@ close (int fd)
   lock_acquire (&file_lock);
   list_remove (&fd_found->thread_elem);
   file_close (fd_found->file);
+  if (fd_found->dir != NULL)
+    dir_close (fd_found->dir);
   lock_release (&file_lock);
   free (fd_found);
 }
@@ -366,8 +420,8 @@ read (int fd, void *buffer, unsigned size)
   else
     {
       struct file *f = find_file (fd);
-
-      if (f == NULL)
+      // should not read dir
+      if (f == NULL || find_file_descripter (fd)->dir != NULL)
         {
           lock_release (&file_lock);
           return -1;
@@ -542,7 +596,11 @@ wait (pid_t pid)
 static bool
 remove (const char *file)
 {
-  return filesys_remove (file);
+  // lock_acquire(&file_lock);
+  bool ret = filesys_remove (file);
+  // printf("remove result:%d\n",ret);
+  return ret;
+  // lock_release(&file_lock);
 }
 
 /* check validtion of ptr when accessing user memory */
@@ -599,4 +657,103 @@ find_file (int fd)
   if (fde == NULL)
     return NULL;
   return fde->file;
+}
+
+/* Changes the current working directory of the process to dir, which may be
+ * relative or absolute. Returns true if successful, false on failure.*/
+static bool
+chdir (const char *dir)
+{
+  if (!is_valid_pointer (dir))
+    {
+      exit (-1);
+    }
+
+  lock_acquire (&file_lock);
+  bool ret = filesys_chdir(dir);
+  lock_release (&file_lock);
+
+  return ret;
+}
+
+/* Creates the directory named dir, which may be relative or absolute. Returns
+ * true if successful, false on failure. Fails if dir already exists or if any
+ * directory name in dir, besides the last, does not already exist. That is,
+ * mkdir("/a/b/c") succeeds only if /a/b already exists and /a/b/c does not.*/
+static bool
+mkdir (const char *dir)
+{
+    if (!is_valid_pointer (dir))
+    {
+      exit (-1);
+    }
+
+  lock_acquire (&file_lock);
+  bool ret = filesys_create (dir, 0, true);
+  lock_release (&file_lock);
+
+  return ret;
+}
+
+/* 
+ * Reads a directory entry from file descriptor fd, which must
+ * represent a directory. If successful, stores the null-terminated file name
+ * in name, which must have room for READDIR_MAX_LEN + 1 bytes, and returns
+ * true. If no entries are left in the directory, returns false.*/
+static bool
+readdir (int fd, char *name)
+{
+  if (!is_valid_pointer (name))
+    {
+      exit (-1);
+    }
+  struct file_descripter *fde = find_file_descripter (fd);
+  if (fde == NULL)
+    return 0;
+
+  lock_acquire (&file_lock);
+  struct inode *inode = file_get_inode (fde->file);
+  if (inode == NULL || !inode_is_dir (inode) || fde->dir == NULL)
+    {
+      lock_release (&file_lock);
+      return false;
+    }
+  bool ret = dir_readdir (fde->dir, name);
+  // printf ("in readdir ----- dir: %p,  name:%s\n", fde->dir, name);
+  lock_release (&file_lock);
+  return ret;
+}
+
+/* Returns true if fd represents a directory, false if it represents an
+ * ordinary file.*/
+static bool
+isdir (int fd)
+{
+  struct file_descripter *fde = find_file_descripter (fd);
+  if (fde == NULL)
+    return 0;
+  lock_acquire (&file_lock);
+  bool ret = inode_is_dir (file_get_inode (fde->file));
+  lock_release (&file_lock);
+  return ret;
+}
+
+/* Returns the inode number of the inode associated with fd, which may
+represent an ordinary file or a directory. An inode number persistently
+identifies a file or directory. It is unique during the file's existence.
+In Pintos, the sector number of the inode is suitable for use as an inode
+number.*/
+static int
+inumber (int fd)
+{
+  struct file_descripter *fde = find_file_descripter (fd);
+  if (fde == NULL)
+    return 0;
+
+  lock_acquire (&file_lock);
+  struct inode * inode = file_get_inode (fde->file);
+  int ret = inode_get_inumber (inode);
+  lock_release (&file_lock);
+
+  return ret;
 }

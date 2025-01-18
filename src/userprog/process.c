@@ -52,6 +52,16 @@ process_execute (const char *file_name)
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
 
   struct thread *t = get_thread_by_tid (tid);
+
+  t->parent = thread_current ();
+
+  // add current working directory
+  if (t->parent && t->parent->dir )
+    t->dir = dir_reopen (t->parent->dir);
+  else
+    t->dir = dir_open_root ();
+
+
   sema_down (&t->wait);
   if (t->exit_status == -1)
     {
@@ -223,6 +233,10 @@ process_exit (void)
       thread_block ();
       intr_enable ();
     // }
+
+  /* Close current working directory */
+  if (cur->dir)
+    dir_close (cur->dir);
 }
 
 /* Sets up the CPU for running user code in the current

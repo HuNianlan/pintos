@@ -11,6 +11,7 @@ struct file_descripter
 {
     int fd;
     struct file *file;
+    struct dir* dir; /* newlly added for subdirs. record the dir of the file (close needs to accept a file descriptor for a directory.)*/
     struct list_elem thread_elem;
 };
 
